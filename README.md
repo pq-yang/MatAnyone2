@@ -49,6 +49,7 @@
 
 
 ## 📮 Update
+- [2026.03] Add uv and huggingface support for easy installation and usage.
 - [2026.03] Release inference codes, evaluation codes, and gradio demo.
 - [2025.12] This repo is created.
 
@@ -65,23 +66,35 @@
 ![overall_structure](assets/matanyone1vs2.jpg)
 
 ## 🔧 Installation
-1. Clone Repo
-    ```bash
-    git clone https://github.com/pq-yang/MatAnyone2
-    cd MatAnyone2
-    ```
 
-2. Create Conda Environment and Install Dependencies
-    ```bash
-    # create new conda env
-    conda create -n matanyone2 python=3.10 -y
-    conda activate matanyone2
+### From PyPI / Source
+```bash
+# install from repo
+pip install git+https://github.com/pq-yang/MatAnyone2.git#egg=matanyone2
 
-    # install python dependencies
-    pip install -e .
-    # [optional] install python dependencies for gradio demo
-    pip3 install -r hugging_face/requirements.txt
-    ```
+# or install optional extras
+pip install  git+https://github.com/pq-yang/MatAnyone2.git#egg=matanyone2[gui]    # Gradio demo + PySide6
+pip install  git+https://github.com/pq-yang/MatAnyone2.git#egg=matanyone2[dev]    # development / evaluation tools
+pip install  git+https://github.com/pq-yang/MatAnyone2.git#egg=matanyone2[all]    # everything
+```
+
+### Conda
+```bash
+conda create -n matanyone2 python=3.10 -y
+conda activate matanyone2
+pip install  git+https://github.com/pq-yang/MatAnyone2.git#egg=matanyone2[all]
+```
+
+### uv (recommended)
+```bash
+# create a new project and add matanyone2
+uv init my-matting-project && cd my-matting-project
+uv add matanyone2@git+https://github.com/pq-yang/MatAnyone2.git
+
+# or with optional extras
+uv add matanyone2[gui]@git+https://github.com/pq-yang/MatAnyone2.git
+uv add matanyone2[all]@git+https://github.com/pq-yang/MatAnyone2.git
+```
 
 ## 🔥 Inference
 
@@ -109,15 +122,33 @@ Run the following command to try it out:
 
 ```shell
 # intput format: video folder
-python inference_matanyone2.py -i inputs/video/test-sample1 -m inputs/mask/test-sample1.png
+matanyone2 -i inputs/video/test-sample1 -m inputs/mask/test-sample1.png
 
 # intput format: mp4
-python inference_matanyone2.py -i inputs/video/test-sample2.mp4 -m inputs/mask/test-sample2.png
+matanyone2 -i inputs/video/test-sample2.mp4 -m inputs/mask/test-sample2.png
 
+# or via python
+python inference_matanyone2.py -i inputs/video/test-sample1 -m inputs/mask/test-sample1.png
 ```
-The results will be saved in the `results` folder, including the foreground output video and the alpha output video. 
-- If you want to save the results as per-frame images, you can set `--save_image`.
-- If you want to set a limit for the maximum input resolution, you can set `--max_size`, and the video will be downsampled if min(w, h) exceeds. By default, we don't set the limit.
+The results will be saved in the `results` folder, including the foreground output video and the alpha output video.
+
+### Python API (recommended 🔥)
+You can load the model directly from Hugging Face using `from_pretrained` and run inference programmatically:
+
+```python
+from matanyone2 import MatAnyone2, InferenceCore
+
+model = MatAnyone2.from_pretrained("not-lain/matanyone2")
+processor = InferenceCore(model, device="cuda:0")
+processor.process_video(
+    input_path="inputs/video/test-sample2.mp4",
+    mask_path="inputs/mask/test-sample2.png",
+    output_path="results",
+)
+``` 
+- If you want to save the results as per-frame images, you can set `--save-image`.
+- If you want to set a limit for the maximum input resolution, you can set `--max-size`, and the video will be downsampled if min(w, h) exceeds. By default, we don't set the limit.
+- Run `matanyone2 --help` for a full list of options.
 
 ## 🎪 Interactive Demo
 To get rid of the preparation for first-frame segmentation mask, we prepare a gradio demo on [hugging face](https://huggingface.co/spaces/PeiqingYang/MatAnyone2) and could also **launch locally**. Just drop your video/image, assign the target masks with a few clicks, and get the the matting results!
@@ -127,7 +158,7 @@ To get rid of the preparation for first-frame segmentation mask, we prepare a gr
 ```shell
 cd hugging_face
 
-# install python dependencies
+# install GUI dependencies (if not already installed via pip install -e ".[gui]")
 pip3 install -r requirements.txt # FFmpeg required
 
 # launch the demo
