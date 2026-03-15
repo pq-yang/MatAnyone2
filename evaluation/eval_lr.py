@@ -98,7 +98,7 @@ class Evaluator:
                 # Write the header
                 if row == 0:
                     metricsheet.write(1, 0, 'Average')
-                    metricsheet.write(1, 1, f'=AVERAGE(C2:ZZ2)')
+                    metricsheet.write(1, 1, '=AVERAGE(C2:ZZ2)')
                     for col in range(len(metric)):
                         metricsheet.write(0, col + 2, col)
                         colname = xlsxwriter.utility.xl_col_to_name(col + 2)

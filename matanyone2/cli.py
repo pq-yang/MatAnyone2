@@ -1,6 +1,9 @@
 import os
+from typing import Annotated
+
 import cv2
 import tqdm
+import typer
 import imageio
 import numpy as np
 from PIL import Image
@@ -10,7 +13,6 @@ import torch.nn.functional as F
 
 from matanyone2.utils.download_util import load_file_from_url
 from matanyone2.utils.inference_utils import gen_dilate, gen_erosion, read_frame_from_videos
-
 from matanyone2.inference.inference_core import InferenceCore
 from matanyone2.utils.get_default_model import get_matanyone2_model
 from matanyone2.utils.device import get_default_device, safe_autocast_decorator
@@ -18,16 +20,19 @@ from matanyone2.utils.device import get_default_device, safe_autocast_decorator
 import warnings
 warnings.filterwarnings("ignore")
 
-device = get_default_device()
+app = typer.Typer(help="MatAnyone2 video matting inference")
+
 
 @torch.inference_mode()
 @safe_autocast_decorator()
-def main(input_path, mask_path, output_path, ckpt_path, n_warmup=10, r_erode=10, r_dilate=10, suffix="", save_image=False, max_size=-1):
+def run_inference(input_path, mask_path, output_path, ckpt_path, n_warmup=10, r_erode=10,
+                  r_dilate=10, suffix="", save_image=False, max_size=-1):
+    device = get_default_device()
 
     # download ckpt for the first inference
     pretrain_model_url = "https://github.com/pq-yang/MatAnyone2/releases/download/v1.0.0/matanyone2.pth"
     ckpt_path = load_file_from_url(pretrain_model_url, 'pretrained_models')
-    
+
     # load MatAnyone model
     matanyone2 = get_matanyone2_model(ckpt_path, device)
 
@@ -42,9 +47,9 @@ def main(input_path, mask_path, output_path, ckpt_path, n_warmup=10, r_erode=10,
 
     # load input frames
     vframes, fps, length, video_name = read_frame_from_videos(input_path)
-    repeated_frames = vframes[0].unsqueeze(0).repeat(n_warmup, 1, 1, 1) # repeat the first frame for warmup
+    repeated_frames = vframes[0].unsqueeze(0).repeat(n_warmup, 1, 1, 1)
     vframes = torch.cat([repeated_frames, vframes], dim=0).float()
-    length += n_warmup  # update length
+    length += n_warmup
 
     # resize if needed
     if max_size > 0:
@@ -55,7 +60,7 @@ def main(input_path, mask_path, output_path, ckpt_path, n_warmup=10, r_erode=10,
             new_w = int(w / min_side * max_size)
             vframes = F.interpolate(vframes, size=(new_h, new_w), mode="area")
             print(f'Resize to {new_h}x{new_w} for processing...')
-        
+
     # set output paths
     os.makedirs(output_path, exist_ok=True)
     if suffix != "":
@@ -69,7 +74,7 @@ def main(input_path, mask_path, output_path, ckpt_path, n_warmup=10, r_erode=10,
     mask = Image.open(mask_path).convert('L')
     mask = np.array(mask)
 
-    bgr = (np.array([120, 255, 155], dtype=np.float32)/255).reshape((1, 1, 3)) # green screen to paste fgr
+    bgr = (np.array([120, 255, 155], dtype=np.float32) / 255).reshape((1, 1, 3))
     objects = [1]
 
     # [optional] erode & dilate
@@ -80,45 +85,42 @@ def main(input_path, mask_path, output_path, ckpt_path, n_warmup=10, r_erode=10,
 
     mask = torch.from_numpy(mask).float().to(device)
 
-    if max_size > 0:  # resize needed
+    if max_size > 0:
         mask = F.interpolate(mask.unsqueeze(0).unsqueeze(0), size=(new_h, new_w), mode="nearest")
-        mask = mask[0,0]
+        mask = mask[0, 0]
 
     # inference start
     phas = []
     fgrs = []
     for ti in tqdm.tqdm(range(length)):
-        # load the image as RGB; normalization is done within the model
         image = vframes[ti]
-
-        image_np = np.array(image.permute(1,2,0))       # for output visualize
-        image = (image / 255.).float().to(device)       # for network input
+        image_np = np.array(image.permute(1, 2, 0))
+        image = (image / 255.).float().to(device)
 
         if ti == 0:
-            output_prob = processor.step(image, mask, objects=objects)      # encode given mask
-            output_prob = processor.step(image, first_frame_pred=True)      # first frame for prediction
+            output_prob = processor.step(image, mask, objects=objects)
+            output_prob = processor.step(image, first_frame_pred=True)
         else:
             if ti <= n_warmup:
-                output_prob = processor.step(image, first_frame_pred=True)  # reinit as the first frame for prediction
+                output_prob = processor.step(image, first_frame_pred=True)
             else:
                 output_prob = processor.step(image)
 
-        # convert output probabilities to alpha matte
         mask = processor.output_prob_to_mask(output_prob)
 
-        # visualize prediction
         pha = mask.unsqueeze(2).cpu().numpy()
         com_np = image_np / 255. * pha + bgr * (1 - pha)
-        
-        # DONOT save the warmup frame
-        if ti > (n_warmup-1):
+
+        if ti > (n_warmup - 1):
             com_np = np.round(np.clip(com_np * 255.0, 0, 255)).astype(np.uint8)
             pha = np.round(np.clip(pha * 255.0, 0, 255)).astype(np.uint8)
             fgrs.append(com_np)
             phas.append(pha)
             if save_image:
-                cv2.imwrite(f'{output_path}/{video_name}/fgr/{str(ti-n_warmup).zfill(4)}.png', com_np[...,[2,1,0]])
-                cv2.imwrite(f'{output_path}/{video_name}/pha/{str(ti-n_warmup).zfill(4)}.png', pha)
+                cv2.imwrite(f'{output_path}/{video_name}/fgr/{str(ti - n_warmup).zfill(4)}.png',
+                            com_np[..., [2, 1, 0]])
+                cv2.imwrite(f'{output_path}/{video_name}/pha/{str(ti - n_warmup).zfill(4)}.png',
+                            pha)
 
     phas = np.array(phas)
     fgrs = np.array(fgrs)
@@ -126,30 +128,44 @@ def main(input_path, mask_path, output_path, ckpt_path, n_warmup=10, r_erode=10,
     imageio.mimwrite(f'{output_path}/{video_name}_fgr.mp4', fgrs, fps=fps, quality=7)
     imageio.mimwrite(f'{output_path}/{video_name}_pha.mp4', phas, fps=fps, quality=7)
 
+
+@app.command()
+def main(
+    input_path: Annotated[str, typer.Option("-i", "--input-path",
+        help="Path of the input video or frame folder.")],
+    mask_path: Annotated[str, typer.Option("-m", "--mask-path",
+        help="Path of the first-frame segmentation mask.")],
+    output_path: Annotated[str, typer.Option("-o", "--output-path",
+        help="Output folder.")] = "results/",
+    ckpt_path: Annotated[str, typer.Option("-c", "--ckpt-path",
+        help="Path of the MatAnyone2 model.")] = "pretrained_models/matanyone2.pth",
+    warmup: Annotated[int, typer.Option("-w", "--warmup",
+        help="Number of warmup iterations for the first frame alpha prediction.")] = 10,
+    erode_kernel: Annotated[int, typer.Option("-e", "--erode-kernel",
+        help="Erosion kernel size on the input mask.")] = 10,
+    dilate_kernel: Annotated[int, typer.Option("-d", "--dilate-kernel",
+        help="Dilation kernel size on the input mask.")] = 10,
+    suffix: Annotated[str, typer.Option(
+        help="Suffix to specify different target when saving.")] = "",
+    save_image: Annotated[bool, typer.Option("--save-image",
+        help="Save output frames.")] = False,
+    max_size: Annotated[int, typer.Option(
+        help="Downsamples if min(w, h) exceeds this value. -1 means no limit.")] = -1,
+):
+    """Run MatAnyone2 video matting inference."""
+    run_inference(
+        input_path=input_path,
+        mask_path=mask_path,
+        output_path=output_path,
+        ckpt_path=ckpt_path,
+        n_warmup=warmup,
+        r_erode=erode_kernel,
+        r_dilate=dilate_kernel,
+        suffix=suffix,
+        save_image=save_image,
+        max_size=max_size,
+    )
+
+
 if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input_path', type=str, default="inputs/video/test-sample1", help='Path of the input video or frame folder.')
-    parser.add_argument('-m', '--mask_path', type=str, default="inputs/mask/test-sample1.png", help='Path of the first-frame segmentation mask.')
-    parser.add_argument('-o', '--output_path', type=str, default="results/", help='Output folder. Default: results')
-    parser.add_argument('-c', '--ckpt_path', type=str, default="pretrained_models/matanyone2.pth", help='Path of the MatAnyone2 model.')
-    parser.add_argument('-w', '--warmup', type=str, default="10", help='Number of warmup iterations for the first frame alpha prediction.')
-    parser.add_argument('-e', '--erode_kernel', type=str, default="10", help='Erosion kernel on the input mask.')
-    parser.add_argument('-d', '--dilate_kernel', type=str, default="10", help='Dilation kernel on the input mask.')
-    parser.add_argument('--suffix', type=str, default="", help='Suffix to specify different target when saving, e.g., target1.')
-    parser.add_argument('--save_image', action='store_true', default=False, help='Save output frames. Default: False')
-    parser.add_argument('--max_size', type=str, default="-1", help='When positive, the video will be downsampled if min(w, h) exceeds. Default: -1 (means no limit)')
-
-    
-    args = parser.parse_args()
-
-    main(input_path=args.input_path, \
-         mask_path=args.mask_path, \
-         output_path=args.output_path, \
-         ckpt_path=args.ckpt_path, \
-         n_warmup=args.warmup, \
-         r_erode=args.erode_kernel, \
-         r_dilate=args.dilate_kernel, \
-         suffix=args.suffix, \
-         save_image=args.save_image, \
-         max_size=args.max_size)
+    app()

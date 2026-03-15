@@ -1,3 +1,4 @@
+import contextlib
 import torch
 import functools
 
@@ -22,7 +23,6 @@ def safe_autocast_decorator(enabled=True):
         return wrapper
     return decorator
 
-import contextlib
 @contextlib.contextmanager
 def safe_autocast(enabled=True):
     device = get_default_device()

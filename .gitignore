@@ -6,3 +6,5 @@ results/
 test_sample/
 pretrained_models/
 data/
+notebooks/
+.venv

@@ -4,7 +4,6 @@ import random
 import numpy as np
 
 import torch
-import torchvision
 
 IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG')
 VIDEO_EXTENSIONS = ('.mp4', '.mov', '.avi', '.MP4', '.MOV', '.AVI')
@@ -12,8 +11,18 @@ VIDEO_EXTENSIONS = ('.mp4', '.mov', '.avi', '.MP4', '.MOV', '.AVI')
 def read_frame_from_videos(frame_root):
     if frame_root.endswith(VIDEO_EXTENSIONS):  # Video file path
         video_name = os.path.basename(frame_root)[:-4]
-        frames, _, info = torchvision.io.read_video(filename=frame_root, pts_unit='sec', output_format='TCHW') # RGB
-        fps = info['video_fps']
+        cap = cv2.VideoCapture(frame_root)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        if fps <= 0:
+            fps = 24
+        frames = []
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            frames.append(frame[..., [2, 1, 0]])  # BGR to RGB, HWC
+        cap.release()
+        frames = torch.Tensor(np.array(frames)).permute(0, 3, 1, 2).contiguous()  # TCHW
     else:
         video_name = os.path.basename(frame_root)
         frames = []
