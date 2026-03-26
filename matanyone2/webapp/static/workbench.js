@@ -20,6 +20,7 @@ function bindWorkbench() {
   const positiveButton = document.getElementById("positive-mode");
   const negativeButton = document.getElementById("negative-mode");
   const stageButtons = Array.from(root.querySelectorAll(".stage-button"));
+  const viewButtons = Array.from(root.querySelectorAll(".canvas-view-tab"));
   const inspectorStage = document.getElementById("inspector-stage");
   const inspectorTarget = document.getElementById("inspector-target");
   const inspectorPoints = document.getElementById("inspector-points");
@@ -32,6 +33,7 @@ function bindWorkbench() {
 
   const state = {
     positiveMode: true,
+    canvasMode: "overlay",
     workbench: null,
     selectedMasks: new Set(),
   };
@@ -155,6 +157,47 @@ function bindWorkbench() {
     }
   }
 
+  function resolveCanvasUrl(payload) {
+    if (state.canvasMode === "mask") {
+      return payload.active_mask_url || payload.template_frame_url || root.dataset.templateFrameUrl;
+    }
+    if (state.canvasMode === "source") {
+      return payload.template_frame_url || root.dataset.templateFrameUrl;
+    }
+    return payload.current_preview_url || payload.template_frame_url || root.dataset.templateFrameUrl;
+  }
+
+  function syncCanvasMode(payload) {
+    if (state.canvasMode === "mask" && !payload.active_mask_url) {
+      state.canvasMode = payload.current_preview_url ? "overlay" : "source";
+    }
+
+    const modeLabel = {
+      source: "Source plate",
+      overlay: "Overlay preview",
+      mask: "Mask inspection",
+    }[state.canvasMode];
+
+    if (canvasModeLabel) {
+      canvasModeLabel.textContent = `${payload.canvas_mode_label || "Guided silhouette pass"} - ${modeLabel}`;
+    }
+
+    if (image) {
+      image.src = withCacheBust(resolveCanvasUrl(payload));
+      image.alt = {
+        source: `Template frame for ${payload.draft_id}`,
+        overlay: `Overlay preview for ${payload.draft_id}`,
+        mask: `Mask preview for ${payload.draft_id}`,
+      }[state.canvasMode];
+    }
+
+    viewButtons.forEach((button) => {
+      const isMask = button.dataset.canvasMode === "mask";
+      button.toggleAttribute("disabled", isMask && !payload.active_mask_url);
+      button.toggleAttribute("data-active", button.dataset.canvasMode === state.canvasMode);
+    });
+  }
+
   function renderWorkbench(payload) {
     state.workbench = payload;
     syncSelectedMasks(payload);
@@ -163,14 +206,7 @@ function bindWorkbench() {
       (target) => target.target_id === payload.active_target_id
     );
 
-    if (image) {
-      image.src = withCacheBust(
-        payload.current_preview_url || payload.template_frame_url || root.dataset.templateFrameUrl
-      );
-    }
-    if (canvasModeLabel) {
-      canvasModeLabel.textContent = payload.canvas_mode_label || "Guided silhouette pass";
-    }
+    syncCanvasMode(payload);
     if (canvasStageNote) {
       canvasStageNote.textContent = payload.stage_note || "";
     }
@@ -217,6 +253,18 @@ function bindWorkbench() {
 
   positiveButton?.addEventListener("click", () => setMode(true));
   negativeButton?.addEventListener("click", () => setMode(false));
+
+  viewButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      if (button.disabled) {
+        return;
+      }
+      state.canvasMode = button.dataset.canvasMode;
+      if (state.workbench) {
+        syncCanvasMode(state.workbench);
+      }
+    });
+  });
 
   stageButtons.forEach((button) => {
     button.addEventListener("click", async () => {

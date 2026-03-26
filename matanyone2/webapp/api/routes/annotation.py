@@ -79,6 +79,15 @@ def _target_payload(target, session):
     }
 
 
+def _active_mask_url(session, draft_id: str):
+    if session.current_mask_path is not None:
+        return f"/api/drafts/{draft_id}/current-mask"
+    saved_mask_name = session.active_target.saved_mask_name
+    if saved_mask_name and saved_mask_name in session.saved_masks:
+        return f"/api/drafts/{draft_id}/masks/{saved_mask_name}"
+    return None
+
+
 def _workbench_payload(session, draft_id: str):
     stage_meta = STAGE_PRESENTATION[session.stage]
     return {
@@ -98,6 +107,7 @@ def _workbench_payload(session, draft_id: str):
             if session.current_mask_path is not None
             else None
         ),
+        "active_mask_url": _active_mask_url(session, draft_id),
         "current_preview_url": (
             f"/api/drafts/{draft_id}/current-preview"
             if session.current_preview_path is not None
@@ -255,4 +265,21 @@ def get_current_mask(draft_id: str, draft_store=Depends(get_draft_store)):
         session.current_mask_path,
         media_type="image/png",
         filename=session.current_mask_path.name,
+    )
+
+
+@router.get("/api/drafts/{draft_id}/masks/{mask_name}")
+def get_saved_mask(
+    draft_id: str,
+    mask_name: str,
+    draft_store=Depends(get_draft_store),
+):
+    session = _require_session(draft_store, draft_id)
+    mask_path = session.saved_masks.get(mask_name)
+    if mask_path is None:
+        raise HTTPException(status_code=404, detail=f"saved mask not found: {mask_name}")
+    return FileResponse(
+        mask_path,
+        media_type="image/png",
+        filename=mask_path.name,
     )

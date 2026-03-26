@@ -162,8 +162,36 @@ def test_saved_mask_is_selected_for_export_and_unlocks_submit(
     assert save_response.json()["mask_name"] == "mask_001"
     assert save_response.json()["selected_mask_names"] == ["mask_001"]
     assert save_response.json()["can_submit"] is True
+    assert save_response.json()["active_mask_url"].endswith(
+        f"/api/drafts/{draft_id}/masks/mask_001"
+    )
     assert state_response.status_code == 200
     assert state_response.json()["selected_mask_names"] == ["mask_001"]
+    assert state_response.json()["active_mask_url"].endswith(
+        f"/api/drafts/{draft_id}/masks/mask_001"
+    )
+
+
+def test_saved_mask_endpoint_serves_named_mask(
+    app_client: TestClient,
+    sample_video_upload,
+):
+    upload_response = app_client.post(
+        "/api/uploads",
+        files={"video": sample_video_upload},
+    )
+    draft_id = upload_response.json()["draft_id"]
+
+    app_client.post(
+        f"/api/drafts/{draft_id}/click",
+        json={"x": 1, "y": 1, "positive": True},
+    )
+    app_client.post(f"/api/drafts/{draft_id}/masks")
+
+    response = app_client.get(f"/api/drafts/{draft_id}/masks/mask_001")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
 
 
 def test_upload_validation_errors_return_400(app_client: TestClient):

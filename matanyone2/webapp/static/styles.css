@@ -509,6 +509,25 @@ button {
   gap: var(--space-4);
 }
 
+.canvas-view-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.canvas-view-tab {
+  min-height: 2.85rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+}
+
+.canvas-view-tab[data-active] {
+  border-color: rgba(118, 199, 255, 0.48);
+  background: rgba(34, 75, 108, 0.28);
+}
+
 .canvas-frame {
   padding: var(--space-4);
   border-radius: calc(var(--radius-xl) - 10px);
