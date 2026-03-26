@@ -44,6 +44,8 @@ def get_job_status(
         "job_id": job.job_id,
         "status": job.status.value,
         "queue_position": queue_position,
+        "warning_text": job.warning_text,
+        "error_text": job.error_text,
         "artifacts": _artifact_urls(job.job_id, settings.runtime_root),
     }
 

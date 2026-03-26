@@ -112,3 +112,40 @@ def test_completed_job_exposes_artifacts_and_downloads_zip(app_client):
     assert status_response.json()["artifacts"]["rgba_png.zip"].endswith("rgba_png.zip")
     assert download_response.status_code == 200
     assert download_response.content == b"zip"
+
+
+def test_job_status_exposes_warning_and_error_text(app_client):
+    repository = app_client.app.state.repository
+    warning_job = repository.create_job(
+        source_video_path="warning.mp4",
+        template_frame_index=0,
+        mask_path="warning.png",
+        params_json="{}",
+    )
+    failed_job = repository.create_job(
+        source_video_path="failed.mp4",
+        template_frame_index=0,
+        mask_path="failed.png",
+        params_json="{}",
+    )
+
+    repository.update_status(
+        warning_job.job_id,
+        JobStatus.COMPLETED_WITH_WARNING,
+        warning_text="prores export skipped",
+    )
+    repository.update_status(
+        failed_job.job_id,
+        JobStatus.FAILED,
+        error_text="gpu worker crashed",
+    )
+
+    warning_response = app_client.get(f"/api/jobs/{warning_job.job_id}")
+    failed_response = app_client.get(f"/api/jobs/{failed_job.job_id}")
+
+    assert warning_response.status_code == 200
+    assert warning_response.json()["warning_text"] == "prores export skipped"
+    assert warning_response.json()["error_text"] is None
+    assert failed_response.status_code == 200
+    assert failed_response.json()["warning_text"] is None
+    assert failed_response.json()["error_text"] == "gpu worker crashed"
