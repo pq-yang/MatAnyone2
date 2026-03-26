@@ -7,7 +7,16 @@ import torch
 import torchvision
 
 IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG')
-VIDEO_EXTENSIONS = ('.mp4', '.mov', '.avi', '.MP4', '.MOV', '.AVI')
+VIDEO_EXTENSIONS = (
+    '.mp4',
+    '.mov',
+    '.avi',
+    '.m4v',
+    '.MP4',
+    '.MOV',
+    '.AVI',
+    '.M4V',
+)
 
 def read_frame_from_videos(frame_root):
     if frame_root.endswith(VIDEO_EXTENSIONS):  # Video file path
