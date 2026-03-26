@@ -3,6 +3,7 @@ import shutil
 import uuid
 
 import cv2
+from fastapi import UploadFile
 
 from matanyone2.webapp.models import DraftRecord
 from matanyone2.webapp.runtime_paths import ensure_dir
@@ -60,3 +61,9 @@ class VideoDraftService:
             frame_count=frame_count,
             duration_seconds=duration_seconds,
         )
+
+    def create_draft_from_upload(self, upload_file: UploadFile) -> DraftRecord:
+        uploads_dir = ensure_dir(self.runtime_root / "uploads")
+        upload_path = uploads_dir / upload_file.filename
+        upload_path.write_bytes(upload_file.file.read())
+        return self.create_draft(upload_path)
