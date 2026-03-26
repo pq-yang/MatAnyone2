@@ -83,6 +83,19 @@
     pip3 install -r hugging_face/requirements.txt
     ```
 
+### Windows `.venv` Setup For Internal Web App
+If you are running the internal web app on a Windows workstation, a local `.venv` is the most reliable setup path:
+
+```powershell
+py -3.10 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install torch==2.7.0 torchvision==0.22.0 torchaudio==2.7.0 --index-url https://download.pytorch.org/whl/cu128
+python -m pip install -e .
+```
+
+The gradio demo keeps its extra dependencies in [`hugging_face/requirements.txt`](./hugging_face/requirements.txt), so install those separately only when you need the demo UI.
+
 ## 🔥 Inference
 
 ### Download Model
@@ -151,6 +164,12 @@ Run the worker in a separate process:
 
 ```shell
 python scripts/run_internal_worker.py
+```
+
+Run an end-to-end smoke test that launches the web app, launches the worker, submits two back-to-back jobs, and verifies queueing plus artifact export:
+
+```shell
+python scripts/smoke_internal_webapp.py --copies 2
 ```
 
 ## 📊 Evaluation
