@@ -58,6 +58,77 @@ def test_submit_flow_returns_job_page(
     assert annotate_response.json()["status"] == "queued"
 
 
+def test_annotation_page_exposes_workbench_contract(
+    app_client: TestClient,
+    sample_video_upload,
+):
+    upload_response = app_client.post(
+        "/api/uploads",
+        files={"video": sample_video_upload},
+    )
+    draft_id = upload_response.json()["draft_id"]
+
+    response = app_client.get(f"/drafts/{draft_id}/annotate")
+
+    assert response.status_code == 200
+    assert f'data-workbench-endpoint="/api/drafts/{draft_id}"' in response.text
+    assert f'data-targets-endpoint="/api/drafts/{draft_id}/targets"' in response.text
+
+
+def test_target_creation_and_selection_round_trip(
+    app_client: TestClient,
+    sample_video_upload,
+):
+    upload_response = app_client.post(
+        "/api/uploads",
+        files={"video": sample_video_upload},
+    )
+    draft_id = upload_response.json()["draft_id"]
+
+    state_response = app_client.get(f"/api/drafts/{draft_id}")
+    create_response = app_client.post(
+        f"/api/drafts/{draft_id}/targets",
+        json={"name": "Hero"},
+    )
+    created = create_response.json()
+    select_response = app_client.post(
+        f"/api/drafts/{draft_id}/targets/{created['target_id']}/select"
+    )
+    selected = select_response.json()
+
+    assert state_response.status_code == 200
+    assert state_response.json()["stage"] == "coarse"
+    assert state_response.json()["active_target_id"] is not None
+    assert create_response.status_code == 200
+    assert created["name"] == "Hero"
+    assert any(target["name"] == "Hero" for target in created["targets"])
+    assert select_response.status_code == 200
+    assert selected["active_target_id"] == created["target_id"]
+    assert any(
+        target["target_id"] == created["target_id"] and target["selected"]
+        for target in selected["targets"]
+    )
+
+
+def test_stage_change_round_trip(
+    app_client: TestClient,
+    sample_video_upload,
+):
+    upload_response = app_client.post(
+        "/api/uploads",
+        files={"video": sample_video_upload},
+    )
+    draft_id = upload_response.json()["draft_id"]
+
+    response = app_client.post(
+        f"/api/drafts/{draft_id}/stage",
+        json={"stage": "refine"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["stage"] == "refine"
+
+
 def test_upload_validation_errors_return_400(app_client: TestClient):
     with TestClient(app_client.app, raise_server_exceptions=False) as client:
         response = client.post(

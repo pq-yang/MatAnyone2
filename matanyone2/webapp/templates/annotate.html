@@ -3,6 +3,9 @@
 <section
   id="annotator-app"
   data-draft-id="{{ draft_id }}"
+  data-workbench-endpoint="/api/drafts/{{ draft_id }}"
+  data-targets-endpoint="/api/drafts/{{ draft_id }}/targets"
+  data-stage-endpoint="/api/drafts/{{ draft_id }}/stage"
   data-click-endpoint="/api/drafts/{{ draft_id }}/click"
   data-save-endpoint="/api/drafts/{{ draft_id }}/masks"
   data-submit-endpoint="/api/drafts/{{ draft_id }}/submit"

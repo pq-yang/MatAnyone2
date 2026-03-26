@@ -3,7 +3,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from matanyone2.webapp.models import DraftRecord, DraftSession, MaskingResult
+from matanyone2.webapp.models import AnnotationTarget, DraftRecord, DraftSession, MaskingResult
 from matanyone2.webapp.runtime_paths import ensure_dir
 
 
@@ -35,6 +35,8 @@ class SamMaskController:
 
 
 class MaskingService:
+    VALID_STAGES = {"coarse", "refine", "preview"}
+
     def __init__(
         self,
         *,
@@ -50,6 +52,22 @@ class MaskingService:
     def create_session(self, draft: DraftRecord) -> DraftSession:
         session_dir = ensure_dir(self.runtime_root / "drafts" / draft.draft_id / "annotation")
         return DraftSession(draft=draft, session_dir=session_dir)
+
+    def create_target(self, session: DraftSession, name: str | None = None) -> AnnotationTarget:
+        session.current_mask_path = None
+        session.current_preview_path = None
+        return session.create_target(name=name)
+
+    def select_target(self, session: DraftSession, target_id: str) -> AnnotationTarget:
+        session.current_mask_path = None
+        session.current_preview_path = None
+        return session.select_target(target_id)
+
+    def set_stage(self, session: DraftSession, stage: str) -> str:
+        if stage not in self.VALID_STAGES:
+            raise ValueError(f"unknown stage: {stage}")
+        session.stage = stage
+        return session.stage
 
     def apply_click(
         self,
@@ -93,6 +111,7 @@ class MaskingService:
         saved_mask_path = session.session_dir / f"{mask_name}.png"
         Image.open(session.current_mask_path).save(saved_mask_path)
         session.saved_masks[mask_name] = saved_mask_path
+        session.active_target.saved_mask_name = mask_name
         session.click_points = []
         session.click_labels = []
         session.current_mask_path = None

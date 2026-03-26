@@ -45,14 +45,72 @@ class DraftRecord:
 
 
 @dataclass(slots=True)
+class AnnotationTarget:
+    target_id: str
+    name: str
+    click_points: list[tuple[int, int]] = field(default_factory=list)
+    click_labels: list[int] = field(default_factory=list)
+    saved_mask_name: str | None = None
+    visible: bool = True
+    locked: bool = False
+
+
+@dataclass(slots=True)
 class DraftSession:
     draft: DraftRecord
     session_dir: Path
-    click_points: list[tuple[int, int]] = field(default_factory=list)
-    click_labels: list[int] = field(default_factory=list)
+    targets: dict[str, AnnotationTarget] = field(default_factory=dict)
+    active_target_id: str | None = None
     saved_masks: dict[str, Path] = field(default_factory=dict)
     current_mask_path: Path | None = None
     current_preview_path: Path | None = None
+    stage: str = "coarse"
+    _target_sequence: int = 0
+
+    def __post_init__(self):
+        if not self.targets:
+            self.create_target()
+        elif self.active_target_id is None:
+            self.active_target_id = next(iter(self.targets))
+            self._target_sequence = len(self.targets)
+
+    @property
+    def active_target(self) -> AnnotationTarget:
+        if self.active_target_id is None or self.active_target_id not in self.targets:
+            return self.create_target()
+        return self.targets[self.active_target_id]
+
+    @property
+    def click_points(self) -> list[tuple[int, int]]:
+        return self.active_target.click_points
+
+    @click_points.setter
+    def click_points(self, value: list[tuple[int, int]]):
+        self.active_target.click_points = list(value)
+
+    @property
+    def click_labels(self) -> list[int]:
+        return self.active_target.click_labels
+
+    @click_labels.setter
+    def click_labels(self, value: list[int]):
+        self.active_target.click_labels = list(value)
+
+    def create_target(self, name: str | None = None) -> AnnotationTarget:
+        self._target_sequence += 1
+        target = AnnotationTarget(
+            target_id=f"target-{self._target_sequence:03d}",
+            name=name or f"Target {self._target_sequence}",
+        )
+        self.targets[target.target_id] = target
+        self.active_target_id = target.target_id
+        return target
+
+    def select_target(self, target_id: str) -> AnnotationTarget:
+        if target_id not in self.targets:
+            raise KeyError(target_id)
+        self.active_target_id = target_id
+        return self.targets[target_id]
 
 
 @dataclass(slots=True)
