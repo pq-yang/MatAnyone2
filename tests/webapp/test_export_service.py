@@ -17,7 +17,11 @@ def test_export_assets_creates_png_zip_even_when_prores_fails(tmp_path, monkeypa
     monkeypatch.setattr(
         service,
         "_extract_frames",
-        lambda *args, **kwargs: ([tmp_path / "fg-0001.png"], [tmp_path / "a-0001.png"]),
+        lambda *args, **kwargs: (
+            [tmp_path / "fg-0001.png"],
+            [tmp_path / "a-0001.png"],
+            24.0,
+        ),
     )
     monkeypatch.setattr(
         service,
@@ -70,3 +74,29 @@ def test_export_assets_writes_rgba_png_sequence_from_videos(tmp_path):
     assert result.png_zip_path.exists()
     assert rgba_frame.mode == "RGBA"
     assert rgba_frame.getextrema()[3][1] > 0
+
+
+def test_export_prores_uses_alpha_capable_ffmpeg_command(tmp_path, monkeypatch):
+    rgba_dir = tmp_path / "rgba_png"
+    rgba_dir.mkdir()
+    Image.new("RGBA", (4, 4), color=(10, 20, 30, 128)).save(rgba_dir / "0000.png")
+
+    service = ExportService(enable_prores=True)
+    captured = {}
+
+    def fake_run(command):
+        captured["command"] = command
+        Path(command[-1]).write_bytes(b"mov")
+
+    monkeypatch.setattr(service, "_run_ffmpeg_command", fake_run)
+
+    output_path = service._export_prores(
+        rgba_dir,
+        tmp_path / "output_prores4444.mov",
+        fps=23.976,
+    )
+
+    assert output_path.exists()
+    assert "prores_ks" in captured["command"]
+    assert "yuva444p10le" in captured["command"]
+    assert "23.976" in captured["command"]

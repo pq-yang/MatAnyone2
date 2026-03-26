@@ -1,4 +1,6 @@
 from pathlib import Path
+import shutil
+import subprocess
 import zipfile
 
 import cv2
@@ -24,7 +26,7 @@ class ExportService:
         alpha_video_path: Path,
         job_dir: Path,
     ) -> ExportResult:
-        foreground_frames, alpha_frames = self._extract_frames(
+        foreground_frames, alpha_frames, fps = self._extract_frames(
             foreground_video_path,
             alpha_video_path,
             job_dir,
@@ -40,7 +42,11 @@ class ExportService:
         prores_path = None
         if self.enable_prores:
             try:
-                prores_path = self._export_prores(rgba_png_dir, job_dir / "output_prores4444.mov")
+                prores_path = self._export_prores(
+                    rgba_png_dir,
+                    job_dir / "output_prores4444.mov",
+                    fps=fps,
+                )
             except RuntimeError as exc:
                 warning_text = str(exc)
 
@@ -56,7 +62,7 @@ class ExportService:
         foreground_video_path: Path,
         alpha_video_path: Path,
         job_dir: Path,
-    ) -> tuple[list[Path], list[Path]]:
+    ) -> tuple[list[Path], list[Path], float]:
         foreground_dir = ensure_dir(job_dir / "foreground_frames")
         alpha_dir = ensure_dir(job_dir / "alpha_frames")
         foreground_paths: list[Path] = []
@@ -64,6 +70,7 @@ class ExportService:
 
         foreground_capture = cv2.VideoCapture(str(foreground_video_path))
         alpha_capture = cv2.VideoCapture(str(alpha_video_path))
+        fps = float(foreground_capture.get(cv2.CAP_PROP_FPS) or 0.0)
 
         try:
             frame_index = 0
@@ -89,7 +96,9 @@ class ExportService:
 
         if not foreground_paths:
             raise RuntimeError("no frames extracted from foreground video")
-        return foreground_paths, alpha_paths
+        if fps <= 0:
+            fps = 24.0
+        return foreground_paths, alpha_paths, fps
 
     def _write_rgba_pngs(
         self,
@@ -123,6 +132,43 @@ class ExportService:
                     archive.write(path, arcname=path.relative_to(source_dir))
         return zip_path
 
-    def _export_prores(self, rgba_png_dir: Path, output_path: Path) -> Path:
-        del rgba_png_dir
+    def _export_prores(self, rgba_png_dir: Path, output_path: Path, *, fps: float) -> Path:
+        first_frame = rgba_png_dir / "0000.png"
+        if not first_frame.exists():
+            raise RuntimeError("rgba png sequence is empty")
+
+        ffmpeg_binary = shutil.which("ffmpeg")
+        if ffmpeg_binary is None:
+            raise RuntimeError("ffmpeg is not installed")
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        command = [
+            ffmpeg_binary,
+            "-y",
+            "-framerate",
+            str(fps),
+            "-i",
+            str(rgba_png_dir / "%04d.png"),
+            "-c:v",
+            "prores_ks",
+            "-profile:v",
+            "4444",
+            "-pix_fmt",
+            "yuva444p10le",
+            str(output_path),
+        ]
+        self._run_ffmpeg_command(command)
+        if not output_path.exists():
+            raise RuntimeError("ffmpeg did not produce prores output")
         return output_path
+
+    def _run_ffmpeg_command(self, command: list[str]) -> None:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if completed.returncode != 0:
+            stderr = completed.stderr.strip() or completed.stdout.strip() or "ffmpeg failed"
+            raise RuntimeError(stderr)
