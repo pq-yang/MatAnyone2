@@ -2,13 +2,29 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>MatAnyone2 Internal Web App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}MatAnyone2 Internal Web App{% endblock %}</title>
   <link rel="stylesheet" href="/static/styles.css">
 </head>
-<body>
-  <main>
-    {% block content %}{% endblock %}
-  </main>
+<body data-page="{% block page_name %}app{% endblock %}">
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="topbar__brand">
+        <div class="brand-mark">M2</div>
+        <div>
+          <p class="eyebrow">Internal Matting Workstation</p>
+          <p class="brand-title">MatAnyone2</p>
+        </div>
+      </div>
+      <div class="topbar__status">
+        <span class="status-chip">Single GPU Worker</span>
+        <span class="status-chip status-chip--muted">Alpha / Foreground / PNG / ProRes</span>
+      </div>
+    </header>
+    <main class="workspace">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
   {% block scripts %}{% endblock %}
 </body>
 </html>

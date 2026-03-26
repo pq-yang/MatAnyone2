@@ -1,13 +1,100 @@
 {% extends "base.html" %}
+{% block title %}New Session · MatAnyone2{% endblock %}
+{% block page_name %}upload{% endblock %}
 {% block content %}
-<h1>Upload</h1>
-<form id="upload-form" data-upload-endpoint="/api/uploads">
-  <label for="video-file">Source video</label>
-  <input id="video-file" name="video" type="file" accept="video/*" required>
-  <button type="submit">Create Draft</button>
-</form>
-<p id="upload-status" aria-live="polite"></p>
+<section class="page upload-page">
+  <div class="page-intro">
+    <p class="eyebrow">New Session</p>
+    <h1 class="page-title">Upload a short clip and move into the annotation workbench.</h1>
+    <p class="page-copy">
+      This internal workstation is tuned for high-quality people matting on TVC-length footage.
+      Start with the source clip, confirm the media profile, then enter the first-frame selection flow.
+    </p>
+  </div>
+
+  <div class="upload-grid">
+    <aside class="panel panel--muted">
+      <div class="panel__header">
+        <p class="panel__eyebrow">System Readiness</p>
+        <h2 class="panel__title">Single-machine queue</h2>
+      </div>
+      <dl class="meta-list meta-list--stacked">
+        <div>
+          <dt>Pipeline</dt>
+          <dd>Upload -> Target Selection -> Matting -> Review</dd>
+        </div>
+        <div>
+          <dt>Recommended Input</dt>
+          <dd>10 seconds or less, 1080p, one primary performance</dd>
+        </div>
+        <div>
+          <dt>Delivery</dt>
+          <dd>Alpha MP4, Foreground MP4, PNG Sequence, ProRes 4444</dd>
+        </div>
+      </dl>
+      <div class="panel-note">
+        Queueing is serial by design. Additional submissions wait rather than competing for GPU memory.
+      </div>
+    </aside>
+
+    <form id="upload-form" class="panel panel--highlight" data-upload-endpoint="/api/uploads" novalidate>
+      <input id="video-file" name="video" type="file" accept="video/*" required hidden>
+      <label id="dropzone-panel" class="dropzone" for="video-file" tabindex="0" role="button">
+        <span class="dropzone__eyebrow">Source Video</span>
+        <strong class="dropzone__title">Drag in a clip or browse from disk</strong>
+        <span class="dropzone__copy">The session draft will extract a template frame and prepare the annotation workbench.</span>
+      </label>
+
+      <div class="form-actions">
+        <button id="upload-submit" class="button button--primary" type="submit" disabled>
+          Enter Annotation Workbench
+        </button>
+        <button id="upload-reset" class="button button--ghost" type="button">
+          Reset
+        </button>
+      </div>
+
+      <p id="upload-status" class="status-text" aria-live="polite">
+        Select a source clip to prepare the draft.
+      </p>
+    </form>
+
+    <aside id="media-info-card" class="panel panel--elevated" data-empty="true">
+      <div class="panel__header">
+        <p class="panel__eyebrow">Media Profile</p>
+        <h2 class="panel__title">Draft metadata</h2>
+      </div>
+
+      <div class="media-card__preview" id="media-preview">
+        No clip selected
+      </div>
+
+      <dl class="meta-list meta-list--stacked">
+        <div>
+          <dt>File</dt>
+          <dd id="media-name">No file selected</dd>
+        </div>
+        <div>
+          <dt>Type</dt>
+          <dd id="media-type">-</dd>
+        </div>
+        <div>
+          <dt>Size</dt>
+          <dd id="media-size">-</dd>
+        </div>
+        <div>
+          <dt>Resolution</dt>
+          <dd id="media-resolution">-</dd>
+        </div>
+        <div>
+          <dt>Duration</dt>
+          <dd id="media-duration">-</dd>
+        </div>
+      </dl>
+    </aside>
+  </div>
+</section>
 {% endblock %}
 {% block scripts %}
-<script src="/static/annotator.js" defer></script>
+<script type="module" src="/static/upload.js"></script>
 {% endblock %}

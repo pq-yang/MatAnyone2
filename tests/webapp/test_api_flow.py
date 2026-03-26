@@ -8,7 +8,7 @@ def test_upload_page_exposes_browser_entrypoint(app_client: TestClient):
     assert response.status_code == 200
     assert 'id="upload-form"' in response.text
     assert 'data-upload-endpoint="/api/uploads"' in response.text
-    assert "/static/annotator.js" in response.text
+    assert "/static/upload.js" in response.text
 
 
 def test_submit_flow_returns_job_page(
