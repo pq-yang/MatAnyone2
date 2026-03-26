@@ -36,3 +36,9 @@ class DraftRecord:
     fps: float
     frame_count: int
     duration_seconds: float
+
+
+@dataclass(slots=True)
+class InferenceResult:
+    foreground_video_path: Path
+    alpha_video_path: Path
