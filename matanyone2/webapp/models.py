@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 
 
 class JobStatus(StrEnum):
@@ -23,3 +24,15 @@ class JobRecord:
     params_json: str
     warning_text: str | None
     error_text: str | None
+
+
+@dataclass(slots=True)
+class DraftRecord:
+    draft_id: str
+    video_path: Path
+    template_frame_path: Path
+    width: int
+    height: int
+    fps: float
+    frame_count: int
+    duration_seconds: float
