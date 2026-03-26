@@ -42,3 +42,11 @@ class DraftRecord:
 class InferenceResult:
     foreground_video_path: Path
     alpha_video_path: Path
+
+
+@dataclass(slots=True)
+class ExportResult:
+    rgba_png_dir: Path
+    png_zip_path: Path
+    prores_path: Path | None
+    warning_text: str | None
