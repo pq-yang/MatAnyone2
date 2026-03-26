@@ -12,6 +12,15 @@ def test_submit_flow_returns_job_page(
     )
     assert upload_response.status_code == 200
     draft_id = upload_response.json()["draft_id"]
+    template_frame_url = upload_response.json()["template_frame_url"]
+
+    template_response = app_client.get(template_frame_url)
+    annotate_page = app_client.get(f"/drafts/{draft_id}/annotate")
+
+    assert template_response.status_code == 200
+    assert template_response.headers["content-type"] == "image/png"
+    assert annotate_page.status_code == 200
+    assert draft_id in annotate_page.text
 
     click_response = app_client.post(
         f"/api/drafts/{draft_id}/click",

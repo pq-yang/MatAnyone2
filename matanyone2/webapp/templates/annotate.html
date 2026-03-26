@@ -1,4 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Annotate</h1>
+<h1>Annotate Draft {{ draft_id }}</h1>
+<p>Source: {{ draft.video_path.name }}</p>
+<p>Template frame: {{ draft.width }}x{{ draft.height }}</p>
+<img src="{{ template_frame_url }}" alt="Template frame for {{ draft_id }}">
 {% endblock %}
