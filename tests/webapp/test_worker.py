@@ -1,9 +1,14 @@
 from pathlib import Path
+import time
 
+import pytest
+
+import scripts.run_internal_worker as run_internal_worker
 from matanyone2.webapp.models import ExportResult
 from matanyone2.webapp.models import JobStatus
 from matanyone2.webapp.queue import QueueCoordinator
 from matanyone2.webapp.repository import JobRepository
+from matanyone2.webapp.config import WebAppSettings
 from matanyone2.webapp.worker import WorkerLoop
 
 
@@ -74,3 +79,82 @@ def test_process_next_job_completes_with_warning_when_export_warns(tmp_path):
     assert processed_job_id == job.job_id
     assert updated_job.status is JobStatus.COMPLETED_WITH_WARNING
     assert updated_job.warning_text == "ffmpeg failed"
+
+
+def test_run_forever_keeps_polling_after_idle(monkeypatch, tmp_path):
+    repo = JobRepository.from_path(tmp_path / "jobs.db")
+    worker = WorkerLoop(
+        coordinator=QueueCoordinator(repo),
+        repository=repo,
+        inference_service=object(),
+        export_service=object(),
+        runtime_root=tmp_path,
+    )
+
+    observed_calls = []
+    process_results = iter([None, "job-1"])
+
+    def fake_process_next_job():
+        observed_calls.append("tick")
+        try:
+            return next(process_results)
+        except StopIteration as exc:
+            raise RuntimeError("stop loop") from exc
+
+    sleep_calls = []
+
+    monkeypatch.setattr(worker, "process_next_job", fake_process_next_job)
+    monkeypatch.setattr(time, "sleep", sleep_calls.append)
+
+    with pytest.raises(RuntimeError, match="stop loop"):
+        worker.run_forever(poll_interval_seconds=0.25)
+
+    assert sleep_calls == [0.25]
+    assert observed_calls == ["tick", "tick", "tick"]
+
+
+def test_run_internal_worker_main_uses_run_forever(monkeypatch, tmp_path):
+    settings = WebAppSettings(
+        runtime_root=tmp_path / "runtime",
+        database_path=tmp_path / "runtime" / "jobs.db",
+    )
+    observed = {}
+    fake_repository = object()
+
+    class FakeWorkerLoop:
+        def __init__(self, coordinator, *, repository, inference_service, export_service, runtime_root):
+            observed["coordinator"] = coordinator
+            observed["repository"] = repository
+            observed["inference_service"] = inference_service
+            observed["export_service"] = export_service
+            observed["runtime_root"] = runtime_root
+
+        def recover(self):
+            observed["recovered"] = True
+
+        def run_forever(self, poll_interval_seconds=1.0):
+            observed["poll_interval_seconds"] = poll_interval_seconds
+
+    class FakeJobRepository:
+        @staticmethod
+        def from_path(path):
+            observed["database_path"] = path
+            return fake_repository
+
+    monkeypatch.setattr(run_internal_worker, "WebAppSettings", lambda: settings)
+    monkeypatch.setattr(run_internal_worker, "JobRepository", FakeJobRepository)
+    monkeypatch.setattr(run_internal_worker, "QueueCoordinator", lambda repo: ("queue", repo))
+    monkeypatch.setattr(run_internal_worker, "InferenceService", lambda: "inference")
+    monkeypatch.setattr(
+        run_internal_worker,
+        "ExportService",
+        lambda enable_prores: ("export", enable_prores),
+    )
+    monkeypatch.setattr(run_internal_worker, "WorkerLoop", FakeWorkerLoop)
+
+    run_internal_worker.main()
+
+    assert observed["database_path"] == settings.database_path
+    assert observed["repository"] is fake_repository
+    assert observed["recovered"] is True
+    assert observed["poll_interval_seconds"] == 1.0

@@ -24,7 +24,10 @@ def create_app(settings=None) -> FastAPI:
         max_video_seconds=settings.max_video_seconds,
         max_upload_bytes=settings.max_upload_bytes,
     )
-    app.state.masking_service = MaskingService(runtime_root=settings.runtime_root)
+    app.state.masking_service = MaskingService(
+        runtime_root=settings.runtime_root,
+        sam_model_type=settings.sam_model_type,
+    )
     app.state.drafts = {}
     app.state.templates = Jinja2Templates(directory="matanyone2/webapp/templates")
     app.state.queue.recover_interrupted_jobs()

@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import sqlite3
 import uuid
@@ -59,7 +59,7 @@ class JobRepository:
                     job.params_json,
                     job.warning_text,
                     job.error_text,
-                    datetime.now(UTC).isoformat(),
+                    datetime.now(timezone.utc).isoformat(),
                 ),
             )
             connection.commit()

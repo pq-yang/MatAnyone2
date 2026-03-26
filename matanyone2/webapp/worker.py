@@ -1,4 +1,5 @@
 from pathlib import Path
+import time
 
 from matanyone2.webapp.models import JobStatus
 from matanyone2.webapp.queue import QueueCoordinator
@@ -22,6 +23,12 @@ class WorkerLoop:
 
     def recover(self) -> None:
         self.coordinator.recover_interrupted_jobs()
+
+    def run_forever(self, poll_interval_seconds: float = 1.0) -> None:
+        while True:
+            processed_job_id = self.process_next_job()
+            if processed_job_id is None:
+                time.sleep(poll_interval_seconds)
 
     def process_next_job(self) -> str | None:
         job_id = self.coordinator.next_job_id()

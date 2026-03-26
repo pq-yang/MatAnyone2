@@ -1,3 +1,10 @@
+try:
+    from scripts._path_bootstrap import ensure_project_root_on_path
+except ModuleNotFoundError:  # pragma: no cover - direct script execution path
+    from _path_bootstrap import ensure_project_root_on_path
+
+ensure_project_root_on_path(__file__)
+
 from matanyone2.webapp.config import WebAppSettings
 from matanyone2.webapp.queue import QueueCoordinator
 from matanyone2.webapp.repository import JobRepository
@@ -17,8 +24,7 @@ def main() -> None:
         runtime_root=settings.runtime_root,
     )
     worker.recover()
-    while worker.process_next_job() is not None:
-        pass
+    worker.run_forever()
 
 
 if __name__ == "__main__":

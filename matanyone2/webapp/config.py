@@ -23,3 +23,4 @@ class WebAppSettings:
     enable_prores_export: bool = (
         os.getenv("MATANYONE2_WEBAPP_ENABLE_PRORES", "1") == "1"
     )
+    sam_model_type: str = os.getenv("MATANYONE2_WEBAPP_SAM_MODEL_TYPE", "vit_h")

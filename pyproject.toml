@@ -25,6 +25,7 @@ dependencies = [
   'cython',
   'gitpython >= 3.1',
   'thinplate@git+https://github.com/cheind/py-thin-plate-spline',
+  'segment-anything @ git+https://github.com/facebookresearch/segment-anything.git',
   'hickle >= 5.0',
   'tensorboard >= 2.11',
   'numpy >= 1.21',

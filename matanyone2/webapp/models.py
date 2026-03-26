@@ -1,6 +1,12 @@
 from dataclasses import dataclass, field
-from enum import StrEnum
+from enum import Enum
 from pathlib import Path
+
+try:
+    from enum import StrEnum
+except ImportError:  # pragma: no cover - Python < 3.11 compatibility
+    class StrEnum(str, Enum):
+        pass
 
 
 class JobStatus(StrEnum):
