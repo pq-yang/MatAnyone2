@@ -12,4 +12,13 @@ def get_job_status(job_id: str, repository=Depends(get_repository)):
         job = repository.get_job(job_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="job not found") from exc
-    return {"job_id": job.job_id, "status": job.status.value}
+    queue_position = (
+        repository.get_queue_position(job.job_id)
+        if job.status.value == "queued"
+        else None
+    )
+    return {
+        "job_id": job.job_id,
+        "status": job.status.value,
+        "queue_position": queue_position,
+    }

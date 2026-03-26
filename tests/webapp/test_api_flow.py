@@ -19,3 +19,14 @@ def test_submit_flow_returns_job_page(
 
     assert annotate_response.status_code == 200
     assert annotate_response.json()["status"] == "queued"
+
+
+def test_second_job_waits_until_first_job_finishes(app_client, seeded_jobs):
+    first_job_id, second_job_id = seeded_jobs
+
+    first_status = app_client.get(f"/api/jobs/{first_job_id}").json()
+    second_status = app_client.get(f"/api/jobs/{second_job_id}").json()
+
+    assert first_status["status"] == "running"
+    assert second_status["status"] == "queued"
+    assert second_status["queue_position"] == 1

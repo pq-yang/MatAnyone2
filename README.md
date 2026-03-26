@@ -138,6 +138,21 @@ By launching, an interactive interface will appear as follow.
 
 ![overall_teaser](assets/teaser_demo.gif)
 
+## 🧪 Internal Web App
+The repository now also includes a lightweight internal-web-app scaffold for the planned queue-based workflow.
+
+Run the web server:
+
+```shell
+python scripts/run_internal_webapp.py
+```
+
+Run the worker in a separate process:
+
+```shell
+python scripts/run_internal_worker.py
+```
+
 ## 📊 Evaluation
 Please refer to the [evaluation documentation](docs/EVAL.md) for details.
 

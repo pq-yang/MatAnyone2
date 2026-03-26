@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from matanyone2.webapp.api.app import create_app
 from matanyone2.webapp.config import WebAppSettings
+from matanyone2.webapp.models import JobStatus
 
 
 @pytest.fixture
@@ -40,3 +41,22 @@ def app_client(tmp_path) -> TestClient:
     app = create_app(settings=settings)
     with TestClient(app) as client:
         yield client
+
+
+@pytest.fixture
+def seeded_jobs(app_client):
+    repository = app_client.app.state.repository
+    first = repository.create_job(
+        source_video_path="first.mp4",
+        template_frame_index=0,
+        mask_path="first.png",
+        params_json="{}",
+    )
+    second = repository.create_job(
+        source_video_path="second.mp4",
+        template_frame_index=0,
+        mask_path="second.png",
+        params_json="{}",
+    )
+    repository.update_status(first.job_id, JobStatus.RUNNING)
+    return first.job_id, second.job_id
