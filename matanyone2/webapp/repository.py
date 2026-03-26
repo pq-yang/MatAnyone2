@@ -97,11 +97,22 @@ class JobRepository:
             ).fetchone()
         return int(row[0])
 
-    def update_status(self, job_id: str, status: JobStatus) -> None:
+    def update_status(
+        self,
+        job_id: str,
+        status: JobStatus,
+        *,
+        warning_text: str | None = None,
+        error_text: str | None = None,
+    ) -> None:
         with connect(self.database_path) as connection:
             connection.execute(
-                "UPDATE jobs SET status = ? WHERE job_id = ?",
-                (status.value, job_id),
+                """
+                UPDATE jobs
+                SET status = ?, warning_text = ?, error_text = ?
+                WHERE job_id = ?
+                """,
+                (status.value, warning_text, error_text, job_id),
             )
             connection.commit()
 

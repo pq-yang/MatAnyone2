@@ -19,3 +19,7 @@ def get_video_service(request: Request):
 
 def get_draft_store(request: Request):
     return request.app.state.drafts
+
+
+def get_masking_service(request: Request):
+    return request.app.state.masking_service

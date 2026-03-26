@@ -4,10 +4,12 @@ import cv2
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from matanyone2.webapp.api.app import create_app
 from matanyone2.webapp.config import WebAppSettings
 from matanyone2.webapp.models import JobStatus
+from matanyone2.webapp.services.masking import MaskingService
 
 
 @pytest.fixture
@@ -39,6 +41,18 @@ def app_client(tmp_path) -> TestClient:
         database_path=runtime_root / "jobs.db",
     )
     app = create_app(settings=settings)
+
+    class FakeController:
+        def first_frame_click(self, image, points, labels, multimask=True):
+            mask = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
+            for x, y in points.tolist():
+                mask[y, x] = 1
+            return mask, np.zeros_like(mask, dtype=np.float32), Image.fromarray(image)
+
+    app.state.masking_service = MaskingService(
+        runtime_root=runtime_root,
+        controller_factory=lambda: FakeController(),
+    )
     with TestClient(app) as client:
         yield client
 

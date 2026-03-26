@@ -1,5 +1,9 @@
 from pathlib import Path
 
+import cv2
+import numpy as np
+from PIL import Image
+
 from matanyone2.webapp.services.export import ExportService
 
 
@@ -35,3 +39,34 @@ def test_export_assets_creates_png_zip_even_when_prores_fails(tmp_path, monkeypa
 
     assert result.png_zip_path.name == "rgba_png.zip"
     assert result.warning_text == "ffmpeg failed"
+
+
+def test_export_assets_writes_rgba_png_sequence_from_videos(tmp_path):
+    foreground = tmp_path / "foreground.mp4"
+    alpha = tmp_path / "alpha.mp4"
+
+    fg_writer = cv2.VideoWriter(
+        str(foreground),
+        cv2.VideoWriter_fourcc(*"mp4v"),
+        2.0,
+        (4, 4),
+    )
+    alpha_writer = cv2.VideoWriter(
+        str(alpha),
+        cv2.VideoWriter_fourcc(*"mp4v"),
+        2.0,
+        (4, 4),
+    )
+    fg_writer.write(np.full((4, 4, 3), (10, 20, 30), dtype=np.uint8))
+    alpha_writer.write(np.full((4, 4, 3), 128, dtype=np.uint8))
+    fg_writer.release()
+    alpha_writer.release()
+
+    service = ExportService(enable_prores=False)
+    result = service.export_assets(foreground, alpha, tmp_path)
+
+    rgba_frame = Image.open(result.rgba_png_dir / "0000.png")
+
+    assert result.png_zip_path.exists()
+    assert rgba_frame.mode == "RGBA"
+    assert rgba_frame.getextrema()[3][1] > 0

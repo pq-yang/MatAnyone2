@@ -7,6 +7,7 @@ from matanyone2.webapp.db import init_database
 from matanyone2.webapp.api.routes import annotation, jobs, pages, uploads
 from matanyone2.webapp.queue import QueueCoordinator
 from matanyone2.webapp.repository import JobRepository
+from matanyone2.webapp.services.masking import MaskingService
 from matanyone2.webapp.services.video import VideoDraftService
 
 
@@ -23,6 +24,7 @@ def create_app(settings=None) -> FastAPI:
         max_video_seconds=settings.max_video_seconds,
         max_upload_bytes=settings.max_upload_bytes,
     )
+    app.state.masking_service = MaskingService(runtime_root=settings.runtime_root)
     app.state.drafts = {}
     app.state.templates = Jinja2Templates(directory="matanyone2/webapp/templates")
     app.state.queue.recover_interrupted_jobs()

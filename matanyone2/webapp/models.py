@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
@@ -36,6 +36,23 @@ class DraftRecord:
     fps: float
     frame_count: int
     duration_seconds: float
+
+
+@dataclass(slots=True)
+class DraftSession:
+    draft: DraftRecord
+    session_dir: Path
+    click_points: list[tuple[int, int]] = field(default_factory=list)
+    click_labels: list[int] = field(default_factory=list)
+    saved_masks: dict[str, Path] = field(default_factory=dict)
+    current_mask_path: Path | None = None
+    current_preview_path: Path | None = None
+
+
+@dataclass(slots=True)
+class MaskingResult:
+    current_mask_path: Path
+    current_preview_path: Path
 
 
 @dataclass(slots=True)
