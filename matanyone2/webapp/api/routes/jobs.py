@@ -46,8 +46,25 @@ def get_job_status(
         "queue_position": queue_position,
         "warning_text": job.warning_text,
         "error_text": job.error_text,
+        "source_video_url": f"/api/jobs/{job.job_id}/source-video",
         "artifacts": _artifact_urls(job.job_id, settings.runtime_root),
     }
+
+
+@router.get("/api/jobs/{job_id}/source-video")
+def get_source_video(
+    job_id: str,
+    repository=Depends(get_repository),
+):
+    try:
+        job = repository.get_job(job_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="job not found") from exc
+
+    source_path = Path(job.source_video_path)
+    if not source_path.exists() or not source_path.is_file():
+        raise HTTPException(status_code=404, detail="source video not found")
+    return FileResponse(path=source_path, filename=source_path.name)
 
 
 @router.get("/api/jobs/{job_id}/artifacts/{artifact_name}")

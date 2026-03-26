@@ -29,3 +29,20 @@ def test_annotation_page_renders_workbench_layout(
     assert 'id="canvas-stage"' in response.text
     assert 'id="layer-panel"' in response.text
     assert 'id="inspector-panel"' in response.text
+
+
+def test_job_page_renders_review_viewport(app_client: TestClient):
+    repository = app_client.app.state.repository
+    job = repository.create_job(
+        source_video_path="queued.mp4",
+        template_frame_index=0,
+        mask_path="queued.png",
+        params_json="{}",
+    )
+
+    response = app_client.get(f"/jobs/{job.job_id}")
+
+    assert response.status_code == 200
+    assert 'id="preview-viewport"' in response.text
+    assert 'id="preview-mode-tabs"' in response.text
+    assert 'id="artifact-panel"' in response.text

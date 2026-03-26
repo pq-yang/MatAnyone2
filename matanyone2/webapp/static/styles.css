@@ -575,8 +575,90 @@ button {
   gap: var(--space-3);
 }
 
-#artifact-list {
-  padding-left: 1.2rem;
+.results-shell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.results-header,
+.results-preview,
+#artifact-panel {
+  min-height: auto;
+}
+
+.results-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.preview-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.preview-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.preview-tab {
+  min-height: 2.9rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+}
+
+.preview-tab[data-active] {
+  border-color: rgba(118, 199, 255, 0.48);
+  background: rgba(34, 75, 108, 0.28);
+}
+
+.preview-viewport {
+  min-height: 26rem;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  border-radius: calc(var(--radius-xl) - 10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(circle at top, rgba(118, 199, 255, 0.08), transparent 34%),
+    rgba(7, 12, 20, 0.82);
+}
+
+#preview-video {
+  width: 100%;
+  max-height: 62vh;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #04070b;
+}
+
+.preview-placeholder {
+  color: var(--text-soft);
+  text-align: center;
+  line-height: 1.7;
+}
+
+.artifact-list {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.artifact-item {
+  padding: 0.85rem 0.95rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 @media (max-width: 1280px) {
@@ -585,6 +667,10 @@ button {
   }
 
   .workbench-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .results-grid {
     grid-template-columns: 1fr;
   }
 
@@ -610,5 +696,10 @@ button {
   .form-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .preview-mode-tabs,
+  .stage-switcher {
+    grid-template-columns: 1fr;
   }
 }

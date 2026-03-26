@@ -165,8 +165,31 @@ def test_job_page_exposes_polling_entrypoint(app_client):
     assert response.status_code == 200
     assert 'id="job-app"' in response.text
     assert f'data-status-endpoint="/api/jobs/{job.job_id}"' in response.text
-    assert 'id="artifact-list"' in response.text
-    assert "/static/annotator.js" in response.text
+    assert f'data-source-video-endpoint="/api/jobs/{job.job_id}/source-video"' in response.text
+    assert 'id="preview-viewport"' in response.text
+    assert 'id="preview-mode-tabs"' in response.text
+    assert 'id="artifact-panel"' in response.text
+    assert "/static/results.js" in response.text
+
+
+def test_job_source_video_endpoint_serves_source_file(app_client):
+    runtime_root = app_client.app.state.settings.runtime_root
+    source_path = runtime_root / "jobs" / "source.mp4"
+    source_path.parent.mkdir(parents=True, exist_ok=True)
+    source_path.write_bytes(b"video-bytes")
+
+    repository = app_client.app.state.repository
+    job = repository.create_job(
+        source_video_path=str(source_path),
+        template_frame_index=0,
+        mask_path="queued.png",
+        params_json="{}",
+    )
+
+    response = app_client.get(f"/api/jobs/{job.job_id}/source-video")
+
+    assert response.status_code == 200
+    assert response.content == b"video-bytes"
 
 
 def test_missing_job_page_returns_404(app_client: TestClient):
