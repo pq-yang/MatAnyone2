@@ -152,7 +152,20 @@ By launching, an interactive interface will appear as follow.
 ![overall_teaser](assets/teaser_demo.gif)
 
 ## 🧪 Internal Web App
-The repository now also includes a lightweight internal-web-app scaffold for the planned queue-based workflow.
+The repository now also includes a desktop-first internal web app for the queue-based review workflow.
+
+Current flow:
+
+1. Upload a short source clip from the `New Session` page.
+2. Enter the `Annotation Workbench` and build one or more target layers from the template frame.
+3. Submit the queued job and inspect `source / overlay / alpha / foreground` from the `Result Review` page before downloading artifacts.
+
+Current outputs:
+
+- `foreground.mp4`
+- `alpha.mp4`
+- `rgba_png.zip`
+- `output_prores4444.mov`
 
 Run the web server:
 
@@ -180,6 +193,8 @@ Windows one-click helpers are also available:
 .\scripts\stop_internal_webapp.ps1
 .\scripts\smoke_internal_webapp.ps1 --copies 2
 ```
+
+The smoke flow submits jobs through the same HTTP workflow used by the UI and verifies that the queue reaches a completed result with generated artifacts.
 
 ## 📊 Evaluation
 Please refer to the [evaluation documentation](docs/EVAL.md) for details.

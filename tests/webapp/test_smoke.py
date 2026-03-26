@@ -128,3 +128,28 @@ def test_poll_jobs_retries_transient_connection_errors():
     assert statuses["job-1"]["status"] == "completed"
     assert statuses["job-2"]["status"] == "completed"
     assert sleep_calls == [0.25, 0.25]
+
+
+def test_poll_jobs_accepts_completed_with_warning():
+    session = _FakeSession(
+        [
+            _FakeResponse(200, {"job_id": "job-1", "status": "running"}),
+            _FakeResponse(200, {"job_id": "job-2", "status": "queued"}),
+            _FakeResponse(200, {"job_id": "job-1", "status": "completed_with_warning"}),
+            _FakeResponse(200, {"job_id": "job-2", "status": "completed"}),
+        ]
+    )
+    monotonic_values = iter([0.0, 0.1, 0.2])
+
+    statuses = poll_jobs(
+        session,
+        "http://127.0.0.1:8010",
+        ["job-1", "job-2"],
+        timeout_seconds=5.0,
+        poll_interval_seconds=0.25,
+        sleep=lambda _: None,
+        monotonic=lambda: next(monotonic_values),
+    )
+
+    assert statuses["job-1"]["status"] == "completed_with_warning"
+    assert statuses["job-2"]["status"] == "completed"
