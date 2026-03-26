@@ -50,3 +50,41 @@ def test_apply_click_and_save_mask_persists_named_mask(tmp_path):
     assert mask_name == "mask_001"
     assert session.saved_masks[mask_name].exists()
     assert controller.calls[0][0].tolist() == [[1, 1]]
+
+
+def test_save_current_mask_resets_click_history_for_next_target(tmp_path):
+    template_frame = tmp_path / "template.png"
+    Image.new("RGB", (10, 10), color=(0, 0, 0)).save(template_frame)
+    draft = DraftRecord(
+        draft_id="draft-1",
+        video_path=tmp_path / "input.mp4",
+        template_frame_path=template_frame,
+        width=10,
+        height=10,
+        fps=24.0,
+        frame_count=1,
+        duration_seconds=0.04,
+    )
+
+    class FakeController:
+        def __init__(self):
+            self.calls = []
+
+        def first_frame_click(self, image, points, labels, multimask=True):
+            self.calls.append((points.copy(), labels.copy(), multimask))
+            mask = np.zeros((10, 10), dtype=np.uint8)
+            for x, y in points.tolist():
+                mask[y, x] = 1
+            return mask, np.zeros((10, 10), dtype=np.float32), Image.fromarray(image)
+
+    controller = FakeController()
+    service = MaskingService(runtime_root=tmp_path, controller_factory=lambda: controller)
+    session = service.create_session(draft)
+
+    service.apply_click(session, x=1, y=1, positive=True)
+    service.save_current_mask(session)
+    service.apply_click(session, x=8, y=8, positive=True)
+
+    assert session.click_points == [(8, 8)]
+    assert session.click_labels == [1]
+    assert controller.calls[1][0].tolist() == [[8, 8]]

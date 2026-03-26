@@ -58,6 +58,17 @@ def test_submit_flow_returns_job_page(
     assert annotate_response.json()["status"] == "queued"
 
 
+def test_upload_validation_errors_return_400(app_client: TestClient):
+    with TestClient(app_client.app, raise_server_exceptions=False) as client:
+        response = client.post(
+            "/api/uploads",
+            files={"video": ("broken.mp4", b"not-a-video", "video/mp4")},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "unable to read video frames"
+
+
 def test_second_job_waits_until_first_job_finishes(app_client, seeded_jobs):
     first_job_id, second_job_id = seeded_jobs
 
@@ -85,6 +96,14 @@ def test_job_page_exposes_polling_entrypoint(app_client):
     assert f'data-status-endpoint="/api/jobs/{job.job_id}"' in response.text
     assert 'id="artifact-list"' in response.text
     assert "/static/annotator.js" in response.text
+
+
+def test_missing_job_page_returns_404(app_client: TestClient):
+    with TestClient(app_client.app, raise_server_exceptions=False) as client:
+        response = client.get("/jobs/missing-job")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "job not found"
 
 
 def test_completed_job_exposes_artifacts_and_downloads_zip(app_client):

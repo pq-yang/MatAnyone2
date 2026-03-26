@@ -93,6 +93,10 @@ class MaskingService:
         saved_mask_path = session.session_dir / f"{mask_name}.png"
         Image.open(session.current_mask_path).save(saved_mask_path)
         session.saved_masks[mask_name] = saved_mask_path
+        session.click_points = []
+        session.click_labels = []
+        session.current_mask_path = None
+        session.current_preview_path = None
         return mask_name
 
     def write_merged_mask(self, session: DraftSession, selected_masks: list[str]) -> Path:

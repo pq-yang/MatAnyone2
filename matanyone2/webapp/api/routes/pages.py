@@ -33,5 +33,8 @@ def annotate_page(request: Request, draft_id: str, draft_store=Depends(get_draft
 @router.get("/jobs/{job_id}")
 def job_page(request: Request, job_id: str, repository=Depends(get_repository)):
     templates = request.app.state.templates
-    job = repository.get_job(job_id)
+    try:
+        job = repository.get_job(job_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="job not found") from exc
     return templates.TemplateResponse(request, "job.html", {"job": job})

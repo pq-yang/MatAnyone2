@@ -18,7 +18,10 @@ def upload_video(
     draft_store=Depends(get_draft_store),
     masking_service=Depends(get_masking_service),
 ):
-    draft = video_service.create_draft_from_upload(video)
+    try:
+        draft = video_service.create_draft_from_upload(video)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     draft_store[draft.draft_id] = masking_service.create_session(draft)
     return {
         "draft_id": draft.draft_id,
