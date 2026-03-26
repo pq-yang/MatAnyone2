@@ -172,6 +172,15 @@ Run an end-to-end smoke test that launches the web app, launches the worker, sub
 python scripts/smoke_internal_webapp.py --copies 2
 ```
 
+Windows one-click helpers are also available:
+
+```powershell
+.\scripts\start_internal_webapp.ps1
+.\scripts\check_internal_webapp.ps1
+.\scripts\stop_internal_webapp.ps1
+.\scripts\smoke_internal_webapp.ps1 --copies 2
+```
+
 ## 📊 Evaluation
 Please refer to the [evaluation documentation](docs/EVAL.md) for details.
 
