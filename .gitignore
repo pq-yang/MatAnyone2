@@ -7,3 +7,4 @@ test_sample/
 pretrained_models/
 data/
 .worktrees/
+runtime/
