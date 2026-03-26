@@ -44,6 +44,29 @@ function bindWorkbench() {
     state.positiveMode = nextPositiveMode;
     positiveButton?.toggleAttribute("data-active", nextPositiveMode);
     negativeButton?.toggleAttribute("data-active", !nextPositiveMode);
+    if (state.workbench) {
+      syncActionState(state.workbench);
+    }
+  }
+
+  function setCanvasMode(nextCanvasMode) {
+    state.canvasMode = nextCanvasMode;
+    if (state.workbench) {
+      syncCanvasMode(state.workbench);
+    }
+  }
+
+  function isTypingContext(target) {
+    if (!(target instanceof HTMLElement)) {
+      return false;
+    }
+    const tagName = target.tagName;
+    return (
+      tagName === "INPUT" ||
+      tagName === "TEXTAREA" ||
+      tagName === "SELECT" ||
+      target.isContentEditable
+    );
   }
 
   function selectedMaskNames() {
@@ -263,10 +286,7 @@ function bindWorkbench() {
       if (button.disabled) {
         return;
       }
-      state.canvasMode = button.dataset.canvasMode;
-      if (state.workbench) {
-        syncCanvasMode(state.workbench);
-      }
+      setCanvasMode(button.dataset.canvasMode);
     });
   });
 
@@ -424,6 +444,99 @@ function bindWorkbench() {
 
   refreshWorkbench().catch((error) => {
     setStatus(status, error.message, true);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.defaultPrevented) {
+      return;
+    }
+
+    const key = event.key;
+    const lowerKey = key.toLowerCase();
+    const hasPrimaryModifier = event.ctrlKey || event.metaKey;
+    const typingContext = isTypingContext(event.target);
+
+    if (hasPrimaryModifier && lowerKey === "s") {
+      event.preventDefault();
+      saveButton?.click();
+      return;
+    }
+
+    if (hasPrimaryModifier && key === "Enter") {
+      event.preventDefault();
+      submitButton?.click();
+      return;
+    }
+
+    if (event.altKey || hasPrimaryModifier || typingContext) {
+      return;
+    }
+
+    switch (key) {
+      case "1":
+      case "2":
+      case "3": {
+        event.preventDefault();
+        const stageButton = stageButtons.find((button) => button.dataset.stage === {
+          "1": "coarse",
+          "2": "refine",
+          "3": "preview",
+        }[key]);
+        stageButton?.click();
+        return;
+      }
+      case "Backspace":
+        event.preventDefault();
+        resetButton?.click();
+        return;
+      default:
+        break;
+    }
+
+    switch (lowerKey) {
+      case "p":
+        event.preventDefault();
+        setMode(true);
+        setStatus(status, "Shortcut: Positive point tool.", false);
+        return;
+      case "n":
+        event.preventDefault();
+        setMode(false);
+        setStatus(status, "Shortcut: Negative point tool.", false);
+        return;
+      case "t":
+        event.preventDefault();
+        createTargetButton?.click();
+        return;
+      case "u":
+        event.preventDefault();
+        undoButton?.click();
+        return;
+      case "r":
+        event.preventDefault();
+        resetButton?.click();
+        return;
+      case "f":
+        event.preventDefault();
+        setCanvasMode("source");
+        setStatus(status, "Shortcut: Source view.", false);
+        return;
+      case "o":
+        event.preventDefault();
+        setCanvasMode("overlay");
+        setStatus(status, "Shortcut: Overlay view.", false);
+        return;
+      case "m":
+        if (viewButtons.find((button) => button.dataset.canvasMode === "mask")?.disabled) {
+          return;
+        }
+        event.preventDefault();
+        setCanvasMode("mask");
+        setStatus(status, "Shortcut: Mask view.", false);
+        return;
+      default:
+        break;
+    }
   });
 }
 

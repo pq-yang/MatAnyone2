@@ -26,6 +26,10 @@ def test_annotation_page_renders_workbench_layout(
     assert response.status_code == 200
     assert 'class="workbench-shell"' in response.text
     assert 'id="tool-rail"' in response.text
+    assert 'id="shortcut-panel"' in response.text
+    assert 'data-shortcut="P"' in response.text
+    assert 'data-shortcut="1"' in response.text
+    assert 'data-shortcut="Ctrl+S"' in response.text
     assert 'id="canvas-stage"' in response.text
     assert 'id="layer-panel"' in response.text
     assert 'id="inspector-panel"' in response.text

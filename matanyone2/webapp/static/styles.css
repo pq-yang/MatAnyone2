@@ -474,6 +474,55 @@ button {
   line-height: 1.7;
 }
 
+.shortcut-panel {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.shortcut-list {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.shortcut-item {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.shortcut-item__label {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.shortcut-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.shortcut-panel kbd {
+  min-width: 2rem;
+  min-height: 1.8rem;
+  padding: 0 0.5rem;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(118, 199, 255, 0.22);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.04);
+}
+
 .workbench-header {
   display: flex;
   align-items: flex-start;
