@@ -1,5 +1,20 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Job {{ job.job_id }}</h1>
-<p>{{ job.status.value }}</p>
+<section
+  id="job-app"
+  data-status-endpoint="/api/jobs/{{ job.job_id }}"
+  data-poll-interval-ms="2000"
+>
+  <h1>Job {{ job.job_id }}</h1>
+  <p id="job-status">{{ job.status.value }}</p>
+  <p id="job-queue-position"></p>
+  <p id="job-message" aria-live="polite"></p>
+  <div>
+    <h2>Artifacts</h2>
+    <ul id="artifact-list"></ul>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="/static/annotator.js" defer></script>
 {% endblock %}

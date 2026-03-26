@@ -2,6 +2,15 @@ from fastapi.testclient import TestClient
 from matanyone2.webapp.models import JobStatus
 
 
+def test_upload_page_exposes_browser_entrypoint(app_client: TestClient):
+    response = app_client.get("/")
+
+    assert response.status_code == 200
+    assert 'id="upload-form"' in response.text
+    assert 'data-upload-endpoint="/api/uploads"' in response.text
+    assert "/static/annotator.js" in response.text
+
+
 def test_submit_flow_returns_job_page(
     app_client: TestClient,
     sample_video_upload,
@@ -27,6 +36,14 @@ def test_submit_flow_returns_job_page(
         json={"x": 1, "y": 1, "positive": True},
     )
     assert click_response.status_code == 200
+    current_preview_url = click_response.json()["current_preview_url"]
+    preview_response = app_client.get(current_preview_url)
+
+    assert preview_response.status_code == 200
+    assert preview_response.headers["content-type"] == "image/png"
+    assert 'id="annotator-app"' in annotate_page.text
+    assert f'data-click-endpoint="/api/drafts/{draft_id}/click"' in annotate_page.text
+    assert "/static/annotator.js" in annotate_page.text
 
     save_response = app_client.post(f"/api/drafts/{draft_id}/masks")
     assert save_response.status_code == 200
@@ -50,6 +67,24 @@ def test_second_job_waits_until_first_job_finishes(app_client, seeded_jobs):
     assert first_status["status"] == "running"
     assert second_status["status"] == "queued"
     assert second_status["queue_position"] == 1
+
+
+def test_job_page_exposes_polling_entrypoint(app_client):
+    repository = app_client.app.state.repository
+    job = repository.create_job(
+        source_video_path="queued.mp4",
+        template_frame_index=0,
+        mask_path="queued.png",
+        params_json="{}",
+    )
+
+    response = app_client.get(f"/jobs/{job.job_id}")
+
+    assert response.status_code == 200
+    assert 'id="job-app"' in response.text
+    assert f'data-status-endpoint="/api/jobs/{job.job_id}"' in response.text
+    assert 'id="artifact-list"' in response.text
+    assert "/static/annotator.js" in response.text
 
 
 def test_completed_job_exposes_artifacts_and_downloads_zip(app_client):

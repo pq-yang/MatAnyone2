@@ -1,4 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Upload</h1>
+<form id="upload-form" data-upload-endpoint="/api/uploads">
+  <label for="video-file">Source video</label>
+  <input id="video-file" name="video" type="file" accept="video/*" required>
+  <button type="submit">Create Draft</button>
+</form>
+<p id="upload-status" aria-live="polite"></p>
+{% endblock %}
+{% block scripts %}
+<script src="/static/annotator.js" defer></script>
 {% endblock %}

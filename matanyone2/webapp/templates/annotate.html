@@ -1,7 +1,41 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Annotate Draft {{ draft_id }}</h1>
-<p>Source: {{ draft.video_path.name }}</p>
-<p>Template frame: {{ draft.width }}x{{ draft.height }}</p>
-<img src="{{ template_frame_url }}" alt="Template frame for {{ draft_id }}">
+<section
+  id="annotator-app"
+  data-draft-id="{{ draft_id }}"
+  data-click-endpoint="/api/drafts/{{ draft_id }}/click"
+  data-save-endpoint="/api/drafts/{{ draft_id }}/masks"
+  data-submit-endpoint="/api/drafts/{{ draft_id }}/submit"
+  data-job-page-prefix="/jobs/"
+>
+  <h1>Annotate Draft {{ draft_id }}</h1>
+  <p>Source: {{ draft.video_path.name }}</p>
+  <p>Template frame: {{ draft.width }}x{{ draft.height }}</p>
+  <div>
+    <button id="positive-mode" type="button" data-positive="true">Positive</button>
+    <button id="negative-mode" type="button" data-positive="false">Negative</button>
+    <button id="save-mask" type="button">Save Mask</button>
+    <button id="submit-job" type="button">Submit Job</button>
+  </div>
+  <p id="annotator-status" aria-live="polite"></p>
+  <img
+    id="annotation-image"
+    src="{{ template_frame_url }}"
+    alt="Template frame for {{ draft_id }}"
+  >
+  <fieldset>
+    <legend>Saved masks</legend>
+    <div id="saved-mask-list">
+      {% for mask_name in saved_masks %}
+      <label>
+        <input type="checkbox" name="mask_name" value="{{ mask_name }}" checked>
+        {{ mask_name }}
+      </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="/static/annotator.js" defer></script>
 {% endblock %}
