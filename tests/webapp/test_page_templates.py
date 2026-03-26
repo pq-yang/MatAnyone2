@@ -59,3 +59,6 @@ def test_job_page_renders_review_viewport(app_client: TestClient):
     assert 'id="preview-viewport"' in response.text
     assert 'id="preview-mode-tabs"' in response.text
     assert 'id="artifact-panel"' in response.text
+    assert 'id="preview-overlay-canvas"' in response.text
+    assert 'id="overlay-foreground-video"' in response.text
+    assert 'id="overlay-alpha-video"' in response.text

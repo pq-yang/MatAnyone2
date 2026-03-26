@@ -38,6 +38,9 @@
 
       <div id="preview-viewport" class="preview-viewport">
         <video id="preview-video" controls playsinline muted></video>
+        <canvas id="preview-overlay-canvas" class="preview-overlay-canvas" hidden></canvas>
+        <video id="overlay-foreground-video" playsinline muted preload="metadata" hidden></video>
+        <video id="overlay-alpha-video" playsinline muted preload="metadata" hidden></video>
         <div id="preview-placeholder" class="preview-placeholder">
           Waiting for the first renderable output.
         </div>

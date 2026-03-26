@@ -721,6 +721,7 @@ button {
   display: grid;
   place-items: center;
   padding: var(--space-4);
+  position: relative;
   border-radius: calc(var(--radius-xl) - 10px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   background:
@@ -734,6 +735,16 @@ button {
   border-radius: var(--radius-md);
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: #04070b;
+}
+
+.preview-overlay-canvas {
+  position: absolute;
+  inset: var(--space-4);
+  width: calc(100% - (var(--space-4) * 2));
+  height: calc(100% - (var(--space-4) * 2));
+  pointer-events: none;
+  border-radius: var(--radius-md);
+  object-fit: contain;
 }
 
 .preview-placeholder {
