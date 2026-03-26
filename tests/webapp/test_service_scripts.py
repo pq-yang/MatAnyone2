@@ -129,3 +129,120 @@ def test_stop_script_waits_for_processes_to_exit(tmp_path):
     finally:
         proc_one.kill()
         proc_two.kill()
+
+
+def test_start_script_and_check_script_report_running_state(tmp_path):
+    service_root = tmp_path / "service"
+    port = "8137"
+
+    start_result = _run_powershell_script(
+        "start_internal_webapp.ps1",
+        "-ServiceRoot",
+        str(service_root),
+        "-Port",
+        port,
+    )
+
+    assert start_result.returncode == 0, start_result.stderr
+    start_payload = json.loads(start_result.stdout)
+    assert start_payload["status"] == "started"
+
+    try:
+        check_payload = None
+        check_result = None
+        for _ in range(20):
+            check_result = _run_powershell_script(
+                "check_internal_webapp.ps1",
+                "-ServiceRoot",
+                str(service_root),
+                "-Port",
+                port,
+            )
+            check_payload = json.loads(check_result.stdout)
+            if check_result.returncode == 0 and check_payload["status"] == "running":
+                break
+            time.sleep(0.5)
+
+        assert check_result is not None
+        assert check_result.returncode == 0, check_result.stderr
+        assert check_payload is not None
+        assert check_payload["status"] == "running"
+        assert check_payload["http_status"] == 200
+
+        time.sleep(1.5)
+        stable_result = _run_powershell_script(
+            "check_internal_webapp.ps1",
+            "-ServiceRoot",
+            str(service_root),
+            "-Port",
+            port,
+        )
+        stable_payload = json.loads(stable_result.stdout)
+
+        assert stable_result.returncode == 0, stable_result.stderr
+        assert stable_payload["status"] == "running"
+        assert stable_payload["http_status"] == 200
+    finally:
+        _run_powershell_script(
+            "stop_internal_webapp.ps1",
+            "-ServiceRoot",
+            str(service_root),
+            "-Port",
+            port,
+        )
+
+
+def test_stop_script_cleans_up_started_service_processes(tmp_path):
+    service_root = tmp_path / "service"
+    port = "8138"
+
+    start_result = _run_powershell_script(
+        "start_internal_webapp.ps1",
+        "-ServiceRoot",
+        str(service_root),
+        "-Port",
+        port,
+    )
+
+    assert start_result.returncode == 0, start_result.stderr
+
+    try:
+        for _ in range(20):
+            check_result = _run_powershell_script(
+                "check_internal_webapp.ps1",
+                "-ServiceRoot",
+                str(service_root),
+                "-Port",
+                port,
+            )
+            if check_result.returncode == 0:
+                break
+            time.sleep(0.5)
+
+        stop_result = _run_powershell_script(
+            "stop_internal_webapp.ps1",
+            "-ServiceRoot",
+            str(service_root),
+            "-Port",
+            port,
+        )
+        dry_run_result = _run_powershell_script(
+            "stop_internal_webapp.ps1",
+            "-ServiceRoot",
+            str(service_root),
+            "-Port",
+            port,
+            "-DryRun",
+        )
+
+        assert stop_result.returncode == 0, stop_result.stderr
+        assert dry_run_result.returncode == 0, dry_run_result.stderr
+        assert json.loads(dry_run_result.stdout)["status"] == "not_running"
+    finally:
+        _run_powershell_script(
+            "stop_internal_webapp.ps1",
+            "-ServiceRoot",
+            str(service_root),
+            "-Port",
+            port,
+        )

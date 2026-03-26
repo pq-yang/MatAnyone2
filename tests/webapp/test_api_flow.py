@@ -124,9 +124,46 @@ def test_stage_change_round_trip(
         f"/api/drafts/{draft_id}/stage",
         json={"stage": "refine"},
     )
+    preview_response = app_client.post(
+        f"/api/drafts/{draft_id}/stage",
+        json={"stage": "preview"},
+    )
 
     assert response.status_code == 200
     assert response.json()["stage"] == "refine"
+    assert response.json()["stage_label"] == "Edge Refinement"
+    assert response.json()["can_apply_clicks"] is True
+    assert response.json()["can_create_target"] is True
+    assert preview_response.status_code == 200
+    assert preview_response.json()["stage"] == "preview"
+    assert preview_response.json()["stage_label"] == "Preview"
+    assert preview_response.json()["can_apply_clicks"] is False
+    assert preview_response.json()["can_create_target"] is False
+
+
+def test_saved_mask_is_selected_for_export_and_unlocks_submit(
+    app_client: TestClient,
+    sample_video_upload,
+):
+    upload_response = app_client.post(
+        "/api/uploads",
+        files={"video": sample_video_upload},
+    )
+    draft_id = upload_response.json()["draft_id"]
+
+    app_client.post(
+        f"/api/drafts/{draft_id}/click",
+        json={"x": 1, "y": 1, "positive": True},
+    )
+    save_response = app_client.post(f"/api/drafts/{draft_id}/masks")
+    state_response = app_client.get(f"/api/drafts/{draft_id}")
+
+    assert save_response.status_code == 200
+    assert save_response.json()["mask_name"] == "mask_001"
+    assert save_response.json()["selected_mask_names"] == ["mask_001"]
+    assert save_response.json()["can_submit"] is True
+    assert state_response.status_code == 200
+    assert state_response.json()["selected_mask_names"] == ["mask_001"]
 
 
 def test_upload_validation_errors_return_400(app_client: TestClient):

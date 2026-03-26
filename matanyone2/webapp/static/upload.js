@@ -86,7 +86,7 @@ function bindUploadPage() {
     try {
       const metadata = await probeVideoFile(file);
       if (mediaResolution) {
-        mediaResolution.textContent = `${metadata.width} × ${metadata.height}`;
+      mediaResolution.textContent = `${metadata.width} x ${metadata.height}`;
       }
       if (mediaDuration) {
         mediaDuration.textContent = formatDuration(metadata.duration);

@@ -29,6 +29,9 @@ def test_annotation_page_renders_workbench_layout(
     assert 'id="canvas-stage"' in response.text
     assert 'id="layer-panel"' in response.text
     assert 'id="inspector-panel"' in response.text
+    assert 'id="canvas-stage-note"' in response.text
+    assert 'id="stage-guidance-title"' in response.text
+    assert 'id="stage-guidance-copy"' in response.text
 
 
 def test_job_page_renders_review_viewport(app_client: TestClient):

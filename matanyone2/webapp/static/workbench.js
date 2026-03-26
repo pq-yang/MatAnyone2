@@ -24,10 +24,16 @@ function bindWorkbench() {
   const inspectorTarget = document.getElementById("inspector-target");
   const inspectorPoints = document.getElementById("inspector-points");
   const inspectorMask = document.getElementById("inspector-mask");
+  const canvasModeLabel = document.getElementById("canvas-mode-label");
+  const canvasStageNote = document.getElementById("canvas-stage-note");
+  const railNote = document.getElementById("rail-note");
+  const guidanceTitle = document.getElementById("stage-guidance-title");
+  const guidanceCopy = document.getElementById("stage-guidance-copy");
 
   const state = {
     positiveMode: true,
     workbench: null,
+    selectedMasks: new Set(),
   };
 
   function setMode(nextPositiveMode) {
@@ -37,15 +43,33 @@ function bindWorkbench() {
   }
 
   function selectedMaskNames() {
-    return Array.from(root.querySelectorAll('input[name="mask_name"]:checked'))
-      .map((input) => input.value);
+    return Array.from(state.selectedMasks).sort();
+  }
+
+  function syncSelectedMasks(payload) {
+    const availableMaskNames = payload.mask_names || [];
+    const available = new Set(availableMaskNames);
+    const serverSelected = new Set(payload.selected_mask_names || []);
+
+    if (state.selectedMasks.size === 0) {
+      state.selectedMasks = serverSelected.size > 0
+        ? serverSelected
+        : new Set(availableMaskNames);
+      return;
+    }
+
+    state.selectedMasks = new Set(
+      Array.from(state.selectedMasks).filter((maskName) => available.has(maskName))
+    );
+    if (state.selectedMasks.size === 0 && serverSelected.size > 0) {
+      state.selectedMasks = serverSelected;
+    }
   }
 
   function renderSavedMasks(maskNames) {
     if (!savedMaskList) {
       return;
     }
-    const selected = new Set(selectedMaskNames());
     savedMaskList.innerHTML = "";
     maskNames.forEach((maskName) => {
       const label = document.createElement("label");
@@ -53,7 +77,15 @@ function bindWorkbench() {
       input.type = "checkbox";
       input.name = "mask_name";
       input.value = maskName;
-      input.checked = selected.size === 0 || selected.has(maskName);
+      input.checked = state.selectedMasks.has(maskName);
+      input.addEventListener("change", () => {
+        if (input.checked) {
+          state.selectedMasks.add(maskName);
+        } else {
+          state.selectedMasks.delete(maskName);
+        }
+        syncActionState(state.workbench);
+      });
       label.appendChild(input);
       label.append(` ${maskName}`);
       savedMaskList.appendChild(label);
@@ -72,7 +104,7 @@ function bindWorkbench() {
       button.dataset.selected = target.target_id === activeTargetId ? "true" : "false";
       button.innerHTML = `
         <span class="target-card__name">${target.name}</span>
-        <span class="target-card__meta">${target.point_count} point${target.point_count === 1 ? "" : "s"} · ${target.saved_mask_name || "unsaved"}</span>
+        <span class="target-card__meta">${target.point_count} point${target.point_count === 1 ? "" : "s"} - ${target.saved_mask_name || "unsaved"}</span>
       `;
       button.addEventListener("click", async () => {
         if (target.target_id === activeTargetId) {
@@ -95,9 +127,37 @@ function bindWorkbench() {
     });
   }
 
+  function syncActionState(payload) {
+    if (!payload) {
+      return;
+    }
+    const canSubmit = payload.can_submit && state.selectedMasks.size > 0;
+    root.dataset.stage = payload.stage;
+    root.dataset.editable = payload.can_apply_clicks ? "true" : "false";
+
+    if (image) {
+      image.dataset.editable = payload.can_apply_clicks ? "true" : "false";
+      image.style.cursor = payload.can_apply_clicks
+        ? state.positiveMode ? "crosshair" : "cell"
+        : "default";
+    }
+
+    positiveButton?.toggleAttribute("disabled", !payload.can_apply_clicks);
+    negativeButton?.toggleAttribute("disabled", !payload.can_apply_clicks);
+    createTargetButton?.toggleAttribute("disabled", !payload.can_create_target);
+    saveButton?.toggleAttribute("disabled", !payload.can_save_current_target);
+    submitButton?.toggleAttribute("disabled", !canSubmit);
+
+    if (submitButton) {
+      submitButton.textContent = payload.stage === "preview"
+        ? "Queue Matting Job"
+        : "Submit Matting Job";
+    }
+  }
+
   function renderWorkbench(payload) {
     state.workbench = payload;
-    root.dataset.stage = payload.stage;
+    syncSelectedMasks(payload);
 
     const currentTarget = payload.targets.find(
       (target) => target.target_id === payload.active_target_id
@@ -108,8 +168,25 @@ function bindWorkbench() {
         payload.current_preview_url || payload.template_frame_url || root.dataset.templateFrameUrl
       );
     }
+    if (canvasModeLabel) {
+      canvasModeLabel.textContent = payload.canvas_mode_label || "Guided silhouette pass";
+    }
+    if (canvasStageNote) {
+      canvasStageNote.textContent = payload.stage_note || "";
+    }
+    if (railNote) {
+      railNote.textContent = payload.stage === "preview"
+        ? "Preview locks point editing so you can review saved masks and export selection without accidental clicks."
+        : "Coarse clicks stay isolated per target layer. Save each layer before moving to the next person.";
+    }
+    if (guidanceTitle) {
+      guidanceTitle.textContent = payload.stage_label || "Coarse Selection";
+    }
+    if (guidanceCopy) {
+      guidanceCopy.textContent = payload.stage_note || "";
+    }
     if (inspectorStage) {
-      inspectorStage.textContent = payload.stage;
+      inspectorStage.textContent = payload.stage_label || payload.stage;
     }
     if (inspectorTarget) {
       inspectorTarget.textContent = currentTarget?.name || "-";
@@ -127,6 +204,7 @@ function bindWorkbench() {
 
     renderTargets(payload.targets || [], payload.active_target_id);
     renderSavedMasks(payload.mask_names || []);
+    syncActionState(payload);
   }
 
   async function refreshWorkbench() {
@@ -152,7 +230,7 @@ function bindWorkbench() {
           })
         );
         renderWorkbench(payload);
-        setStatus(status, `Stage: ${payload.stage}.`, false);
+        setStatus(status, `${payload.stage_label} ready.`, false);
       } catch (error) {
         setStatus(status, error.message, true);
       }
@@ -160,6 +238,9 @@ function bindWorkbench() {
   });
 
   createTargetButton?.addEventListener("click", async () => {
+    if (createTargetButton.disabled) {
+      return;
+    }
     setStatus(status, "Creating a new target layer...", false);
     try {
       const payload = await parseJson(
@@ -177,6 +258,11 @@ function bindWorkbench() {
   });
 
   image?.addEventListener("click", async (event) => {
+    if (!state.workbench?.can_apply_clicks) {
+      setStatus(status, "Preview mode is read-only. Switch back to coarse or refine to place more points.", false);
+      return;
+    }
+
     const bounds = image.getBoundingClientRect();
     const scaleX = image.naturalWidth / bounds.width;
     const scaleY = image.naturalHeight / bounds.height;
@@ -204,6 +290,9 @@ function bindWorkbench() {
   });
 
   saveButton?.addEventListener("click", async () => {
+    if (saveButton.disabled) {
+      return;
+    }
     setStatus(status, "Saving current target mask...", false);
     try {
       const payload = await parseJson(
@@ -211,6 +300,9 @@ function bindWorkbench() {
           method: "POST",
         })
       );
+      if (payload.mask_name) {
+        state.selectedMasks.add(payload.mask_name);
+      }
       renderWorkbench(payload);
       setStatus(status, `Saved ${payload.mask_name}.`, false);
     } catch (error) {
@@ -220,6 +312,10 @@ function bindWorkbench() {
 
   submitButton?.addEventListener("click", async () => {
     const selectedMasks = selectedMaskNames();
+    if (submitButton.disabled || selectedMasks.length === 0) {
+      setStatus(status, "Select at least one saved mask before queueing the job.", true);
+      return;
+    }
     setStatus(status, "Submitting queued job...", false);
     try {
       const payload = await parseJson(

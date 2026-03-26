@@ -450,6 +450,13 @@ button {
   border-color: rgba(118, 199, 255, 0.34);
 }
 
+.tool-button:disabled,
+.button:disabled {
+  border-color: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-soft);
+}
+
 .tool-button[data-active],
 .stage-button[data-active],
 .target-card[data-selected="true"] {
@@ -520,6 +527,15 @@ button {
   width: 100%;
   max-height: 68vh;
   object-fit: contain;
+  transition: opacity 160ms ease, box-shadow 160ms ease;
+}
+
+#annotation-image[data-editable="true"] {
+  box-shadow: 0 0 0 1px rgba(118, 199, 255, 0.12);
+}
+
+#annotation-image[data-editable="false"] {
+  opacity: 0.92;
 }
 
 .target-list {
@@ -543,6 +559,18 @@ button {
 
 .saved-mask-group {
   margin-top: var(--space-6);
+}
+
+.guidance-card {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.guidance-card__title {
+  margin: 0 0 var(--space-3);
+  font-size: 1rem;
+  font-weight: 600;
 }
 
 #saved-mask-list label {

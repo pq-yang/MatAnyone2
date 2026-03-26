@@ -32,6 +32,33 @@ class DraftStagePayload(BaseModel):
 
 router = APIRouter()
 
+STAGE_PRESENTATION = {
+    "coarse": {
+        "stage_label": "Coarse Selection",
+        "canvas_mode_label": "Guided silhouette pass",
+        "stage_note": (
+            "Establish each person with a few positive and negative clicks. "
+            "Save the target once the silhouette is broadly correct."
+        ),
+    },
+    "refine": {
+        "stage_label": "Edge Refinement",
+        "canvas_mode_label": "Contour tightening",
+        "stage_note": (
+            "Stay near hairlines, shoulders, and translucent edges. "
+            "Refinement keeps the current target isolated while you tighten the contour."
+        ),
+    },
+    "preview": {
+        "stage_label": "Preview",
+        "canvas_mode_label": "Read-only review",
+        "stage_note": (
+            "Point editing is locked in preview. Review saved targets, confirm export masks, "
+            "then queue the matting job."
+        ),
+    },
+}
+
 
 def _require_session(draft_store, draft_id: str):
     session = draft_store.get(draft_id)
@@ -53,9 +80,17 @@ def _target_payload(target, session):
 
 
 def _workbench_payload(session, draft_id: str):
+    stage_meta = STAGE_PRESENTATION[session.stage]
     return {
         "draft_id": draft_id,
         "stage": session.stage,
+        "stage_label": stage_meta["stage_label"],
+        "canvas_mode_label": stage_meta["canvas_mode_label"],
+        "stage_note": stage_meta["stage_note"],
+        "can_apply_clicks": session.stage != "preview",
+        "can_create_target": session.stage != "preview",
+        "can_save_current_target": session.current_mask_path is not None,
+        "can_submit": bool(session.selected_mask_names),
         "active_target_id": session.active_target_id,
         "template_frame_url": f"/api/drafts/{draft_id}/template-frame",
         "current_mask_url": (
@@ -69,6 +104,7 @@ def _workbench_payload(session, draft_id: str):
             else None
         ),
         "mask_names": sorted(session.saved_masks),
+        "selected_mask_names": sorted(session.selected_mask_names),
         "targets": [
             _target_payload(target, session)
             for target in session.targets.values()

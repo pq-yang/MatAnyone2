@@ -111,6 +111,7 @@ class MaskingService:
         saved_mask_path = session.session_dir / f"{mask_name}.png"
         Image.open(session.current_mask_path).save(saved_mask_path)
         session.saved_masks[mask_name] = saved_mask_path
+        session.selected_mask_names.add(mask_name)
         session.active_target.saved_mask_name = mask_name
         session.click_points = []
         session.click_labels = []

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Annotation Workbench · MatAnyone2{% endblock %}
+{% block title %}Annotation Workbench - MatAnyone2{% endblock %}
 {% block page_name %}annotate{% endblock %}
 {% block content %}
 <section
@@ -33,7 +33,7 @@
       </button>
     </div>
 
-    <div class="rail-note">
+    <div id="rail-note" class="rail-note">
       Coarse clicks stay isolated per target layer. Save each layer before moving to the next person.
     </div>
   </aside>
@@ -46,7 +46,7 @@
       </div>
       <div class="workbench-meta">
         <span>Source: {{ draft.video_path.name }}</span>
-        <span>{{ draft.width }} × {{ draft.height }}</span>
+        <span>{{ draft.width }} x {{ draft.height }}</span>
       </div>
     </header>
 
@@ -62,8 +62,11 @@
           <p class="panel__eyebrow">Canvas</p>
           <h3 class="panel__title">Template frame preview</h3>
         </div>
-        <span id="canvas-mode-label" class="status-chip status-chip--muted">Overlay Preview</span>
+        <span id="canvas-mode-label" class="status-chip status-chip--muted">Guided silhouette pass</span>
       </div>
+      <p id="canvas-stage-note" class="status-text">
+        Establish the subject with a few positive and negative clicks before saving the current target.
+      </p>
 
       <div class="canvas-frame">
         <img
@@ -126,8 +129,12 @@
           <dd id="inspector-mask">Not saved yet</dd>
         </div>
       </dl>
-      <div class="panel-note">
-        Use positive and negative points to establish the subject first. Move to refinement once the silhouette is roughly correct.
+      <div class="guidance-card">
+        <p class="panel__eyebrow">Stage Guidance</p>
+        <h3 id="stage-guidance-title" class="guidance-card__title">Coarse Selection</h3>
+        <p id="stage-guidance-copy" class="panel-note">
+          Use positive and negative points to establish the subject first. Move to refinement once the silhouette is roughly correct.
+        </p>
       </div>
     </section>
   </aside>
