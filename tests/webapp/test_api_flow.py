@@ -194,6 +194,36 @@ def test_saved_mask_endpoint_serves_named_mask(
     assert response.headers["content-type"] == "image/png"
 
 
+def test_undo_click_and_reset_target_round_trip(
+    app_client: TestClient,
+    sample_video_upload,
+):
+    upload_response = app_client.post(
+        "/api/uploads",
+        files={"video": sample_video_upload},
+    )
+    draft_id = upload_response.json()["draft_id"]
+
+    app_client.post(
+        f"/api/drafts/{draft_id}/click",
+        json={"x": 1, "y": 1, "positive": True},
+    )
+    app_client.post(
+        f"/api/drafts/{draft_id}/click",
+        json={"x": 2, "y": 2, "positive": False},
+    )
+
+    undo_response = app_client.post(f"/api/drafts/{draft_id}/undo")
+    reset_response = app_client.post(f"/api/drafts/{draft_id}/reset-target")
+
+    assert undo_response.status_code == 200
+    assert undo_response.json()["targets"][0]["point_count"] == 1
+    assert undo_response.json()["current_preview_url"] is not None
+    assert reset_response.status_code == 200
+    assert reset_response.json()["targets"][0]["point_count"] == 0
+    assert reset_response.json()["current_preview_url"] is None
+
+
 def test_upload_validation_errors_return_400(app_client: TestClient):
     with TestClient(app_client.app, raise_server_exceptions=False) as client:
         response = client.post(

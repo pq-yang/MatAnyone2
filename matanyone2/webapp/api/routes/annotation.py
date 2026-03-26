@@ -99,6 +99,8 @@ def _workbench_payload(session, draft_id: str):
         "can_apply_clicks": session.stage != "preview",
         "can_create_target": session.stage != "preview",
         "can_save_current_target": session.current_mask_path is not None,
+        "can_undo_clicks": session.stage != "preview" and len(session.click_points) > 0,
+        "can_reset_target": session.stage != "preview" and len(session.click_points) > 0,
         "can_submit": bool(session.selected_mask_names),
         "active_target_id": session.active_target_id,
         "template_frame_url": f"/api/drafts/{draft_id}/template-frame",
@@ -212,6 +214,28 @@ def save_mask(
     response = _workbench_payload(session, draft_id)
     response.update({"mask_name": mask_name})
     return response
+
+
+@router.post("/api/drafts/{draft_id}/undo")
+def undo_click(
+    draft_id: str,
+    draft_store=Depends(get_draft_store),
+    masking_service=Depends(get_masking_service),
+):
+    session = _require_session(draft_store, draft_id)
+    masking_service.undo_last_click(session)
+    return _workbench_payload(session, draft_id)
+
+
+@router.post("/api/drafts/{draft_id}/reset-target")
+def reset_target(
+    draft_id: str,
+    draft_store=Depends(get_draft_store),
+    masking_service=Depends(get_masking_service),
+):
+    session = _require_session(draft_store, draft_id)
+    masking_service.reset_active_target(session)
+    return _workbench_payload(session, draft_id)
 
 
 @router.post("/api/drafts/{draft_id}/submit")

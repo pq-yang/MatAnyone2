@@ -15,6 +15,8 @@ function bindWorkbench() {
   const saveButton = document.getElementById("save-mask");
   const submitButton = document.getElementById("submit-job");
   const createTargetButton = document.getElementById("create-target");
+  const undoButton = document.getElementById("undo-click");
+  const resetButton = document.getElementById("reset-target");
   const savedMaskList = document.getElementById("saved-mask-list");
   const targetList = document.getElementById("target-list");
   const positiveButton = document.getElementById("positive-mode");
@@ -147,6 +149,8 @@ function bindWorkbench() {
     positiveButton?.toggleAttribute("disabled", !payload.can_apply_clicks);
     negativeButton?.toggleAttribute("disabled", !payload.can_apply_clicks);
     createTargetButton?.toggleAttribute("disabled", !payload.can_create_target);
+    undoButton?.toggleAttribute("disabled", !payload.can_undo_clicks);
+    resetButton?.toggleAttribute("disabled", !payload.can_reset_target);
     saveButton?.toggleAttribute("disabled", !payload.can_save_current_target);
     submitButton?.toggleAttribute("disabled", !canSubmit);
 
@@ -300,6 +304,42 @@ function bindWorkbench() {
       );
       renderWorkbench(payload);
       setStatus(status, `Created ${payload.name}.`, false);
+    } catch (error) {
+      setStatus(status, error.message, true);
+    }
+  });
+
+  undoButton?.addEventListener("click", async () => {
+    if (undoButton.disabled) {
+      return;
+    }
+    setStatus(status, "Removing the last click...", false);
+    try {
+      const payload = await parseJson(
+        await fetch(`${root.dataset.workbenchEndpoint}/undo`, {
+          method: "POST",
+        })
+      );
+      renderWorkbench(payload);
+      setStatus(status, "Removed the last click from the active target.", false);
+    } catch (error) {
+      setStatus(status, error.message, true);
+    }
+  });
+
+  resetButton?.addEventListener("click", async () => {
+    if (resetButton.disabled) {
+      return;
+    }
+    setStatus(status, "Resetting the active target...", false);
+    try {
+      const payload = await parseJson(
+        await fetch(`${root.dataset.workbenchEndpoint}/reset-target`, {
+          method: "POST",
+        })
+      );
+      renderWorkbench(payload);
+      setStatus(status, "Cleared the active target back to an empty click state.", false);
     } catch (error) {
       setStatus(status, error.message, true);
     }

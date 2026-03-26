@@ -33,6 +33,8 @@ def test_annotation_page_renders_workbench_layout(
     assert 'data-canvas-mode="source"' in response.text
     assert 'data-canvas-mode="overlay"' in response.text
     assert 'data-canvas-mode="mask"' in response.text
+    assert 'id="undo-click"' in response.text
+    assert 'id="reset-target"' in response.text
     assert 'id="canvas-stage-note"' in response.text
     assert 'id="stage-guidance-title"' in response.text
     assert 'id="stage-guidance-copy"' in response.text

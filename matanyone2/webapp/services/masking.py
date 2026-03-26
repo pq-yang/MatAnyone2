@@ -77,9 +77,31 @@ class MaskingService:
         y: int,
         positive: bool,
     ) -> MaskingResult:
+        session.click_points = session.click_points + [(x, y)]
+        session.click_labels = session.click_labels + [1 if positive else 0]
+        return self._render_active_target(session)
+
+    def undo_last_click(self, session: DraftSession) -> MaskingResult | None:
+        if not session.click_points:
+            self._clear_current_render(session)
+            return None
+
+        session.click_points = session.click_points[:-1]
+        session.click_labels = session.click_labels[:-1]
+        if not session.click_points:
+            self._clear_current_render(session)
+            return None
+        return self._render_active_target(session)
+
+    def reset_active_target(self, session: DraftSession) -> None:
+        session.click_points = []
+        session.click_labels = []
+        self._clear_current_render(session)
+
+    def _render_active_target(self, session: DraftSession) -> MaskingResult:
         image = np.array(Image.open(session.draft.template_frame_path).convert("RGB"))
-        points = np.array(session.click_points + [(x, y)], dtype=np.int32)
-        labels = np.array(session.click_labels + [1 if positive else 0], dtype=np.int32)
+        points = np.array(session.click_points, dtype=np.int32)
+        labels = np.array(session.click_labels, dtype=np.int32)
 
         mask, _, painted_image = self._get_controller().first_frame_click(
             image=image,
@@ -103,6 +125,10 @@ class MaskingService:
             current_mask_path=current_mask_path,
             current_preview_path=current_preview_path,
         )
+
+    def _clear_current_render(self, session: DraftSession) -> None:
+        session.current_mask_path = None
+        session.current_preview_path = None
 
     def save_current_mask(self, session: DraftSession) -> str:
         if session.current_mask_path is None:
