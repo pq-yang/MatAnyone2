@@ -1,5 +1,6 @@
 import runpy
 import sys
+from importlib.util import find_spec
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -58,3 +59,7 @@ def test_run_internal_worker_script_bootstraps_from_scripts_dir(monkeypatch):
     globals_after_load = runpy.run_path(str(script_path), run_name="__not_main__")
 
     assert "main" in globals_after_load
+
+
+def test_internal_webapp_runtime_has_matplotlib_available():
+    assert find_spec("matplotlib") is not None

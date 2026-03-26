@@ -29,6 +29,7 @@ dependencies = [
   'hickle >= 5.0',
   'tensorboard >= 2.11',
   'numpy >= 1.21',
+  'matplotlib >= 3.8',
   'Pillow >= 9.5',
   'opencv-python >= 4.8',
   'scipy >= 1.7',
