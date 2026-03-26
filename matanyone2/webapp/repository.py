@@ -97,6 +97,39 @@ class JobRepository:
             ).fetchone()
         return int(row[0])
 
+    def update_status(self, job_id: str, status: JobStatus) -> None:
+        with connect(self.database_path) as connection:
+            connection.execute(
+                "UPDATE jobs SET status = ? WHERE job_id = ?",
+                (status.value, job_id),
+            )
+            connection.commit()
+
+    def mark_running_jobs_interrupted(self) -> None:
+        with connect(self.database_path) as connection:
+            connection.execute(
+                "UPDATE jobs SET status = ? WHERE status = ?",
+                (JobStatus.INTERRUPTED.value, JobStatus.RUNNING.value),
+            )
+            connection.commit()
+
+    def next_queued_job(self) -> JobRecord | None:
+        with connect(self.database_path) as connection:
+            row = connection.execute(
+                """
+                SELECT job_id, status, source_video_path, mask_path, template_frame_index,
+                       params_json, warning_text, error_text
+                FROM jobs
+                WHERE status = ?
+                ORDER BY created_at ASC
+                LIMIT 1
+                """,
+                (JobStatus.QUEUED.value,),
+            ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_job(row)
+
     @staticmethod
     def _row_to_job(row: sqlite3.Row) -> JobRecord:
         return JobRecord(
