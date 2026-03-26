@@ -43,7 +43,7 @@ def test_submit_flow_returns_job_page(
     assert preview_response.headers["content-type"] == "image/png"
     assert 'id="annotator-app"' in annotate_page.text
     assert f'data-click-endpoint="/api/drafts/{draft_id}/click"' in annotate_page.text
-    assert "/static/annotator.js" in annotate_page.text
+    assert "/static/workbench.js" in annotate_page.text
 
     save_response = app_client.post(f"/api/drafts/{draft_id}/masks")
     assert save_response.status_code == 200

@@ -14,6 +14,14 @@ export async function parseJson(response) {
   return payload;
 }
 
+export function withCacheBust(url) {
+  if (!url) {
+    return url;
+  }
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}t=${Date.now()}`;
+}
+
 export function formatBytes(bytes) {
   if (!Number.isFinite(bytes) || bytes <= 0) {
     return "-";

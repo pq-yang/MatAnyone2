@@ -398,6 +398,163 @@ button {
   color: var(--accent);
 }
 
+.workbench-shell {
+  display: grid;
+  grid-template-columns: minmax(14rem, 16rem) minmax(0, 1fr) minmax(19rem, 22rem);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.workbench-main,
+.workbench-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.workbench-sidebar {
+  min-width: 0;
+}
+
+.workbench-rail,
+.sidebar-panel,
+.workbench-header,
+.stage-switcher,
+.canvas-stage {
+  min-height: auto;
+}
+
+.tool-stack {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.tool-button,
+.stage-button,
+.target-card {
+  width: 100%;
+  min-height: 3.1rem;
+  padding: 0.95rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  text-align: left;
+  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+.tool-button:hover,
+.stage-button:hover,
+.target-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(118, 199, 255, 0.34);
+}
+
+.tool-button[data-active],
+.stage-button[data-active],
+.target-card[data-selected="true"] {
+  border-color: rgba(118, 199, 255, 0.48);
+  background: rgba(34, 75, 108, 0.28);
+}
+
+.tool-button--ghost {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.rail-note {
+  margin-top: var(--space-6);
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+
+.workbench-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5);
+}
+
+.workbench-meta {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+}
+
+.stage-switcher {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.canvas-stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.canvas-meta,
+.canvas-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.canvas-frame {
+  padding: var(--space-4);
+  border-radius: calc(var(--radius-xl) - 10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.03) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255, 255, 255, 0.03) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, 0.03) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255, 255, 255, 0.03) 75%),
+    rgba(7, 12, 20, 0.72);
+  background-size: 24px 24px;
+  background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+}
+
+#annotation-image {
+  width: 100%;
+  max-height: 68vh;
+  object-fit: contain;
+}
+
+.target-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.target-card {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.target-card__name {
+  font-weight: 600;
+}
+
+.target-card__meta {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.saved-mask-group {
+  margin-top: var(--space-6);
+}
+
+#saved-mask-list label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.65rem 0.75rem;
+  margin-bottom: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+}
+
 #annotator-app,
 #job-app {
   padding: var(--space-6);
@@ -424,6 +581,10 @@ button {
 
 @media (max-width: 1280px) {
   .upload-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workbench-shell {
     grid-template-columns: 1fr;
   }
 
