@@ -340,6 +340,10 @@ def submit_draft(
             {
                 "template_frame_index": payload.template_frame_index,
                 "selected_masks": payload.selected_masks,
+                "selected_mask_presets": {
+                    mask_name: session.saved_mask_presets.get(mask_name, "balanced")
+                    for mask_name in payload.selected_masks
+                },
             }
         ),
     )

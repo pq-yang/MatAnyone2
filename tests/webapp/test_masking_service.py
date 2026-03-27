@@ -95,6 +95,66 @@ def test_save_current_mask_resets_click_history_for_next_target(tmp_path):
     assert controller.calls[1][0].tolist() == [[8, 8]]
 
 
+def test_save_current_mask_applies_hair_preset_and_records_metadata(tmp_path):
+    template_frame = tmp_path / "template.png"
+    Image.new("RGB", (9, 9), color=(0, 0, 0)).save(template_frame)
+    draft = DraftRecord(
+        draft_id="draft-1",
+        video_path=tmp_path / "input.mp4",
+        template_frame_path=template_frame,
+        width=9,
+        height=9,
+        fps=24.0,
+        frame_count=1,
+        duration_seconds=0.04,
+    )
+
+    service = MaskingService(runtime_root=tmp_path, controller_factory=lambda: None)
+    session = service.create_session(draft)
+    session.current_mask_path = session.session_dir / "current_mask.png"
+    Image.fromarray(
+        np.pad(np.array([[255]], dtype=np.uint8), ((4, 4), (4, 4))),
+        mode="L",
+    ).save(session.current_mask_path)
+    service.update_target(session, session.active_target_id, refine_preset="hair")
+
+    mask_name = service.save_current_mask(session)
+    saved_mask = np.array(Image.open(session.saved_masks[mask_name]).convert("L"))
+
+    assert mask_name == "mask_001"
+    assert session.saved_mask_presets[mask_name] == "hair"
+    assert int(saved_mask.sum()) > 255
+
+
+def test_save_current_mask_applies_edge_preset_to_tighten_mask(tmp_path):
+    template_frame = tmp_path / "template.png"
+    Image.new("RGB", (9, 9), color=(0, 0, 0)).save(template_frame)
+    draft = DraftRecord(
+        draft_id="draft-1",
+        video_path=tmp_path / "input.mp4",
+        template_frame_path=template_frame,
+        width=9,
+        height=9,
+        fps=24.0,
+        frame_count=1,
+        duration_seconds=0.04,
+    )
+
+    service = MaskingService(runtime_root=tmp_path, controller_factory=lambda: None)
+    session = service.create_session(draft)
+    original_mask = np.zeros((9, 9), dtype=np.uint8)
+    original_mask[2:7, 2:7] = 255
+    session.current_mask_path = session.session_dir / "current_mask.png"
+    Image.fromarray(original_mask, mode="L").save(session.current_mask_path)
+    service.update_target(session, session.active_target_id, refine_preset="edge")
+
+    mask_name = service.save_current_mask(session)
+    saved_mask = np.array(Image.open(session.saved_masks[mask_name]).convert("L"))
+
+    assert session.saved_mask_presets[mask_name] == "edge"
+    assert int(saved_mask.sum()) < int(original_mask.sum())
+
+
 def test_update_target_mutates_name_visibility_and_lock_state(tmp_path):
     template_frame = tmp_path / "template.png"
     Image.new("RGB", (4, 4), color=(0, 0, 0)).save(template_frame)

@@ -1,3 +1,5 @@
+import json
+
 from fastapi.testclient import TestClient
 from matanyone2.webapp.models import JobStatus
 
@@ -56,6 +58,38 @@ def test_submit_flow_returns_job_page(
 
     assert annotate_response.status_code == 200
     assert annotate_response.json()["status"] == "queued"
+
+
+def test_submit_persists_selected_mask_presets_in_job_params(
+    app_client: TestClient,
+    sample_video_upload,
+):
+    upload_response = app_client.post(
+        "/api/uploads",
+        files={"video": sample_video_upload},
+    )
+    draft_id = upload_response.json()["draft_id"]
+
+    app_client.patch(
+        f"/api/drafts/{draft_id}/targets/target-001",
+        json={"refine_preset": "hair"},
+    )
+    app_client.post(
+        f"/api/drafts/{draft_id}/click",
+        json={"x": 1, "y": 1, "positive": True},
+    )
+    app_client.post(f"/api/drafts/{draft_id}/masks")
+    submit_response = app_client.post(
+        f"/api/drafts/{draft_id}/submit",
+        json={"template_frame_index": 0, "selected_masks": ["mask_001"]},
+    )
+
+    repository = app_client.app.state.repository
+    job = repository.get_job(submit_response.json()["job_id"])
+    params = json.loads(job.params_json)
+
+    assert submit_response.status_code == 200
+    assert params["selected_mask_presets"] == {"mask_001": "hair"}
 
 
 def test_annotation_page_exposes_workbench_contract(
@@ -468,7 +502,7 @@ def test_job_status_exposes_review_summary_and_artifact_metadata(app_client):
         source_video_path=str(source_path),
         template_frame_index=12,
         mask_path="hero_mask.png",
-        params_json='{"template_frame_index": 12, "selected_masks": ["mask_001", "mask_002"]}',
+        params_json='{"template_frame_index": 12, "selected_masks": ["mask_001", "mask_002"], "selected_mask_presets": {"mask_001": "hair"}}',
     )
     repository.update_status(
         job.job_id,
@@ -491,6 +525,7 @@ def test_job_status_exposes_review_summary_and_artifact_metadata(app_client):
     assert payload["job_summary"]["template_frame_index"] == 12
     assert payload["job_summary"]["selected_mask_count"] == 2
     assert payload["job_summary"]["selected_masks"] == ["mask_001", "mask_002"]
+    assert payload["job_summary"]["selected_mask_presets"] == {"mask_001": "hair"}
     assert [step["state"] for step in payload["timeline"]] == [
         "complete",
         "complete",

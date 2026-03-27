@@ -80,6 +80,9 @@ def _build_job_summary(job) -> dict[str, object]:
     selected_masks = params.get("selected_masks")
     if not isinstance(selected_masks, list):
         selected_masks = []
+    selected_mask_presets = params.get("selected_mask_presets")
+    if not isinstance(selected_mask_presets, dict):
+        selected_mask_presets = {}
 
     return {
         "source_name": Path(job.source_video_path).name,
@@ -89,6 +92,7 @@ def _build_job_summary(job) -> dict[str, object]:
         ),
         "selected_mask_count": len(selected_masks),
         "selected_masks": selected_masks,
+        "selected_mask_presets": selected_mask_presets,
         "mask_name": Path(job.mask_path).name,
     }
 

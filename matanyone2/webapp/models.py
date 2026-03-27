@@ -63,6 +63,7 @@ class DraftSession:
     targets: dict[str, AnnotationTarget] = field(default_factory=dict)
     active_target_id: str | None = None
     saved_masks: dict[str, Path] = field(default_factory=dict)
+    saved_mask_presets: dict[str, str] = field(default_factory=dict)
     selected_mask_names: set[str] = field(default_factory=set)
     current_mask_path: Path | None = None
     current_preview_path: Path | None = None

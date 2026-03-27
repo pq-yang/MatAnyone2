@@ -30,6 +30,13 @@ SAM2_CHECKPOINTS = {
     },
 }
 
+PRESET_LABELS = {
+    "balanced": "Balanced",
+    "hair": "Hair Priority",
+    "edge": "Edge Priority",
+    "motion": "Motion Blur",
+}
+
 
 def merge_masks(masks: list[np.ndarray]) -> np.ndarray:
     if not masks:
@@ -237,6 +244,25 @@ class MaskingService:
         session.click_labels = []
         self._clear_current_render(session)
 
+    def apply_refine_preset(self, mask: np.ndarray, preset: str) -> np.ndarray:
+        if preset not in self.VALID_REFINE_PRESETS:
+            raise ValueError(f"unknown refine preset: {preset}")
+
+        binary_mask = np.where(mask > 127, 255, 0).astype(np.uint8)
+        if preset == "balanced":
+            return binary_mask
+
+        mask_image = Image.fromarray(binary_mask, mode="L")
+        if preset == "hair":
+            processed = mask_image.filter(ImageFilter.MaxFilter(3))
+        elif preset == "edge":
+            processed = mask_image.filter(ImageFilter.MinFilter(3))
+        else:
+            processed = mask_image.filter(ImageFilter.GaussianBlur(radius=1.35))
+            return np.where(np.array(processed, dtype=np.uint8) >= 84, 255, 0).astype(np.uint8)
+
+        return np.where(np.array(processed, dtype=np.uint8) > 127, 255, 0).astype(np.uint8)
+
     def _render_active_target(self, session: DraftSession) -> MaskingResult:
         image = np.array(Image.open(session.draft.template_frame_path).convert("RGB"))
         points = np.array(session.click_points, dtype=np.int32)
@@ -266,8 +292,14 @@ class MaskingService:
             raise ValueError("no current mask to save")
         mask_name = f"mask_{len(session.saved_masks) + 1:03d}"
         saved_mask_path = session.session_dir / f"{mask_name}.png"
-        Image.open(session.current_mask_path).save(saved_mask_path)
+        current_mask = np.array(Image.open(session.current_mask_path).convert("L"), dtype=np.uint8)
+        processed_mask = self.apply_refine_preset(
+            current_mask,
+            session.active_target.refine_preset,
+        )
+        Image.fromarray(processed_mask, mode="L").save(saved_mask_path)
         session.saved_masks[mask_name] = saved_mask_path
+        session.saved_mask_presets[mask_name] = session.active_target.refine_preset
         session.selected_mask_names.add(mask_name)
         session.active_target.saved_mask_name = mask_name
         session.click_points = []
