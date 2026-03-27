@@ -25,6 +25,7 @@ def test_annotation_page_renders_workbench_layout(
 
     assert response.status_code == 200
     assert 'class="workbench-shell"' in response.text
+    assert 'data-default-canvas-mode="source"' in response.text
     assert 'id="workflow-panel"' in response.text
     assert 'id="target-controls"' in response.text
     assert 'id="target-list"' in response.text

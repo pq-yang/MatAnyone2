@@ -98,7 +98,7 @@ function bindWorkbench() {
 
   const state = {
     activeTool: "point-positive",
-    canvasMode: "overlay",
+    canvasMode: root.dataset.defaultCanvasMode || "source",
     workbench: null,
     selectedMasks: new Set(),
     brushRadius: Number(brushRadiusInput?.value || 28),
@@ -915,6 +915,9 @@ function bindWorkbench() {
     if (!payload) {
       return;
     }
+    if (state.canvasMode !== "source") {
+      setCanvasMode("source");
+    }
     const frame = clampFrame(
       state.playheadFrame,
       0,
@@ -988,6 +991,9 @@ function bindWorkbench() {
     const payload = state.workbench;
     if (!payload) {
       return;
+    }
+    if (state.canvasMode !== "source") {
+      setCanvasMode("source");
     }
     state.playheadFrame = clampFrame(
       Number(sourcePlayheadSlider.value),
