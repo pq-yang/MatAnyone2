@@ -144,6 +144,27 @@ class DesktopWorkbenchWindow(QMainWindow):
         view_row.addStretch(1)
         center_layout.addLayout(view_row)
 
+        tool_row = QHBoxLayout()
+        self.select_subject_button = QPushButton("Select Subject")
+        self.exclude_button = QPushButton("Exclude")
+        self.brush_add_button = QPushButton("Brush Add")
+        self.brush_remove_button = QPushButton("Brush Remove")
+        self.brush_feather_button = QPushButton("Brush Feather")
+        self.interaction_toolbar_buttons = {
+            "positive": self.select_subject_button,
+            "negative": self.exclude_button,
+            "brush_add": self.brush_add_button,
+            "brush_remove": self.brush_remove_button,
+            "brush_feather": self.brush_feather_button,
+        }
+        for button in self.interaction_toolbar_buttons.values():
+            button.setCheckable(True)
+            tool_row.addWidget(button)
+        self.interaction_hint_label = QLabel("Select Subject, then click the monitor to tag the active person or object.")
+        tool_row.addSpacing(8)
+        tool_row.addWidget(self.interaction_hint_label, 1)
+        center_layout.addLayout(tool_row)
+
         self.monitor = MonitorPane()
         center_layout.addWidget(self.monitor, 1)
 
@@ -298,6 +319,8 @@ class DesktopWorkbenchWindow(QMainWindow):
 
         for key, button in self.view_buttons.items():
             button.clicked.connect(lambda _checked=False, mode=key: self._set_view_mode(mode))
+        for mode, button in self.interaction_toolbar_buttons.items():
+            button.clicked.connect(lambda _checked=False, value=mode: self._set_interaction_mode(value))
 
     def load_video_file(self, video_path: str | Path) -> None:
         if self.controller is None:
@@ -381,6 +404,17 @@ class DesktopWorkbenchWindow(QMainWindow):
         self.refine_preset_combo.blockSignals(True)
         self.refine_preset_combo.setCurrentIndex(index)
         self.refine_preset_combo.blockSignals(False)
+        interaction_index = {
+            "positive": 0,
+            "negative": 1,
+            "brush_add": 2,
+            "brush_remove": 3,
+            "brush_feather": 4,
+        }.get(self.current_interaction_mode, 0)
+        self.interaction_mode.blockSignals(True)
+        self.interaction_mode.setCurrentIndex(interaction_index)
+        self.interaction_mode.blockSignals(False)
+        self._sync_interaction_toolbar()
 
     def _sync_action_states(self) -> None:
         can_edit = self.controller is not None and self.state.can_enter_mask and self.state.workflow_step != "review"
@@ -393,6 +427,10 @@ class DesktopWorkbenchWindow(QMainWindow):
             (self.state.workflow_step in {"mask", "refine"} and self.state.current_preview_path is not None)
             or self.state.workflow_step == "review"
         )
+        for button in self.interaction_toolbar_buttons.values():
+            button.setEnabled(can_edit)
+        self.interaction_mode.setEnabled(can_edit)
+        self.interaction_hint_label.setVisible(can_edit)
 
     def _update_timeline_labels(self) -> None:
         fps = self._active_fps()
@@ -611,8 +649,29 @@ class DesktopWorkbenchWindow(QMainWindow):
             "Brush Remove": "brush_remove",
             "Brush Feather": "brush_feather",
         }
-        self.current_interaction_mode = mapping[text]
+        self._set_interaction_mode(mapping[text], sync_combo=False)
+
+    def _set_interaction_mode(self, mode: str, *, sync_combo: bool = True) -> None:
+        self.current_interaction_mode = mode
+        if sync_combo:
+            index = {
+                "positive": 0,
+                "negative": 1,
+                "brush_add": 2,
+                "brush_remove": 3,
+                "brush_feather": 4,
+            }.get(mode, 0)
+            self.interaction_mode.blockSignals(True)
+            self.interaction_mode.setCurrentIndex(index)
+            self.interaction_mode.blockSignals(False)
         self.monitor.surface.set_brush_enabled(self.current_interaction_mode.startswith("brush_"))
+        self._sync_interaction_toolbar()
+
+    def _sync_interaction_toolbar(self) -> None:
+        for mode, button in self.interaction_toolbar_buttons.items():
+            button.blockSignals(True)
+            button.setChecked(mode == self.current_interaction_mode)
+            button.blockSignals(False)
 
     def _on_refine_controls_changed(self) -> None:
         if self.controller is None:

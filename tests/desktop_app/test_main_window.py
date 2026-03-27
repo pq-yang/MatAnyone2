@@ -62,3 +62,27 @@ def test_main_window_exposes_horizontal_timeline_actions(qapp, tmp_path: Path):
 
     assert buttons == ["Mark In", "Mark Out", "Clear", "Play"]
     assert window.timeline_actions_layout.count() >= 7
+
+
+def test_main_window_exposes_explicit_subject_selection_toolbar(qapp, tmp_path: Path):
+    window = DesktopWorkbenchWindow(
+        config=DesktopAppConfig.for_root(tmp_path),
+        initial_state=_state(),
+    )
+
+    buttons = [
+        window.select_subject_button.text(),
+        window.exclude_button.text(),
+        window.brush_add_button.text(),
+        window.brush_remove_button.text(),
+        window.brush_feather_button.text(),
+    ]
+
+    assert buttons == [
+        "Select Subject",
+        "Exclude",
+        "Brush Add",
+        "Brush Remove",
+        "Brush Feather",
+    ]
+    assert window.select_subject_button.isChecked() is True
