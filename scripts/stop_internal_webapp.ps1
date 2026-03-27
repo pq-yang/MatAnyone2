@@ -17,7 +17,13 @@ $state = Read-InternalWebAppState -StateFile $config.state_file
 $stoppedPids = @()
 
 if ($null -eq $state) {
-    $fallbackPids = @(Get-InternalWebAppManagedProcesses -RepoRoot $config.repo_root | Select-Object -ExpandProperty ProcessId -Unique)
+    $fallbackPids = @(
+        Get-InternalWebAppManagedProcesses `
+            -RepoRoot $config.repo_root `
+            -RuntimeRoot $config.runtime_root `
+            -ServiceRoot $config.service_root |
+        Select-Object -ExpandProperty ProcessId -Unique
+    )
     if ($DryRun) {
         Write-InternalWebAppJson @{
             status = if ($fallbackPids.Count -gt 0) { "dry_run" } else { "not_running" }

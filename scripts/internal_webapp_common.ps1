@@ -115,16 +115,22 @@ function Test-InternalWebAppProcess {
 
 function Get-InternalWebAppManagedProcesses {
     param(
-        [string]$RepoRoot
+        [string]$RepoRoot,
+        [string]$RuntimeRoot = "",
+        [string]$ServiceRoot = ""
     )
 
     return Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
         Where-Object {
-            $_.CommandLine -and (
-                $_.CommandLine -like "*$RepoRoot*" -and (
-                    $_.CommandLine -like "*scripts.run_internal_webapp:app*" -or
-                    $_.CommandLine -like "*scripts/run_internal_worker.py*" -or
-                    $_.CommandLine -like "*scripts\\run_internal_worker.py*"
+            $commandLine = $_.CommandLine
+            $matchesRepo = $commandLine -and $commandLine -like "*$RepoRoot*"
+            $matchesService = (-not $ServiceRoot) -or ($commandLine -like "*$ServiceRoot*")
+            $matchesRuntime = (-not $RuntimeRoot) -or ($commandLine -like "*$RuntimeRoot*")
+            $matchesRepo -and $matchesService -and $matchesRuntime -and (
+                $commandLine -like "*$RepoRoot*" -and (
+                    $commandLine -like "*scripts.run_internal_webapp:app*" -or
+                    $commandLine -like "*scripts/run_internal_worker.py*" -or
+                    $commandLine -like "*scripts\\run_internal_worker.py*"
                 )
             )
         }
