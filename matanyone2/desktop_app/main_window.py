@@ -731,6 +731,19 @@ class DesktopWorkbenchWindow(QMainWindow):
                 message = "Trimmed range is active. Drag the anchor rail inside the selected segment, or use Clear to go back to the whole clip."
         elif self.state.workflow_step == "review":
             message = "Review the processed clip here. Use Export to open outputs or return to Refine."
+        elif (
+            self.state.workflow_step in {"mask", "refine"}
+            and self.state.current_mask_path is not None
+            and self.state.current_preview_path is not None
+            and self.current_view_mode == "overlay"
+        ):
+            message = "Selection updated. The main monitor is showing Overlay. Click Mask to inspect the matte, keep clicking to refine, or Save Target when the result looks right."
+        elif (
+            self.state.workflow_step in {"mask", "refine"}
+            and self.state.current_mask_path is not None
+            and self.current_view_mode == "mask"
+        ):
+            message = "Mask view is live. Inspect the matte here, then switch back to Source or Overlay to keep refining, or Save Target to continue."
         elif self.current_interaction_mode == "negative":
             message = "Exclude mode is active. Click the monitor to subtract distracting regions."
         elif self.current_interaction_mode == "brush_add":

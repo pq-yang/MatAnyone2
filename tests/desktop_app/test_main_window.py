@@ -218,3 +218,20 @@ def test_select_subject_from_clip_uses_default_anchor(qapp, tmp_path: Path):
     assert window.state.workflow_step == "mask"
     assert window.state.template_frame_index == 2
     assert window.current_playhead_frame == 2
+
+
+def test_mask_hint_guides_user_to_overlay_mask_and_save(qapp, tmp_path: Path):
+    window = DesktopWorkbenchWindow(
+        config=DesktopAppConfig.for_root(tmp_path),
+        initial_state=_state_for_step("mask"),
+    )
+    window.state.current_mask_path = tmp_path / "mask.png"
+    window.state.current_preview_path = tmp_path / "preview.png"
+    window.current_view_mode = "overlay"
+
+    window._sync_interaction_hint()
+
+    hint = window.interaction_hint_label.text().lower()
+    assert "overlay" in hint
+    assert "mask" in hint
+    assert "save target" in hint
