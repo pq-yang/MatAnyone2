@@ -20,7 +20,12 @@ function bindResultsPage() {
   const statusNode = document.getElementById("job-status");
   const queueNode = document.getElementById("job-queue-position");
   const messageNode = document.getElementById("job-message");
-  const artifactList = document.getElementById("artifact-list");
+  const artifactList = document.getElementById("artifact-summary-list");
+  const reviewSummaryList = document.getElementById("review-summary-list");
+  const timelineList = document.getElementById("job-timeline");
+  const warningPanel = document.getElementById("warning-panel");
+  const warningTitle = document.getElementById("warning-title");
+  const warningCopy = document.getElementById("warning-copy");
   const previewVideo = document.getElementById("preview-video");
   const previewPlaceholder = document.getElementById("preview-placeholder");
   const previewCaption = document.getElementById("preview-caption");
@@ -76,18 +81,140 @@ function bindResultsPage() {
     return "Source preview is always available for quick comparison against the matte outputs.";
   }
 
-  function renderArtifacts(artifacts) {
+  function renderReviewSummary(summary, payload) {
+    if (!reviewSummaryList || !summary) {
+      return;
+    }
+
+    const rows = [
+      ["Source", summary.source_name || "Unknown source"],
+      ["Status", payload.status_label || payload.status],
+      ["Template frame", `Frame ${summary.template_frame_index ?? 0}`],
+      [
+        "Selected targets",
+        summary.selected_mask_count
+          ? `${summary.selected_mask_count} matte${summary.selected_mask_count > 1 ? "s" : ""}`
+          : "No saved target selected",
+      ],
+      [
+        "Mask set",
+        Array.isArray(summary.selected_masks) && summary.selected_masks.length
+          ? summary.selected_masks.join(", ")
+          : summary.mask_name || "Awaiting export masks",
+      ],
+    ];
+
+    if (payload.queue_position) {
+      rows.splice(2, 0, ["Queue", `Position ${payload.queue_position}`]);
+    }
+
+    reviewSummaryList.innerHTML = "";
+    rows.forEach(([label, value]) => {
+      const row = document.createElement("div");
+      const dt = document.createElement("dt");
+      dt.textContent = label;
+      const dd = document.createElement("dd");
+      dd.textContent = value;
+      row.append(dt, dd);
+      reviewSummaryList.appendChild(row);
+    });
+  }
+
+  function renderTimeline(timeline) {
+    if (!timelineList) {
+      return;
+    }
+    timelineList.innerHTML = "";
+    (timeline || []).forEach((step) => {
+      const item = document.createElement("li");
+      item.className = "timeline-step";
+      item.dataset.state = step.state;
+
+      const dot = document.createElement("span");
+      dot.className = "timeline-step__dot";
+      dot.setAttribute("aria-hidden", "true");
+
+      const copy = document.createElement("div");
+      copy.className = "timeline-step__copy";
+
+      const label = document.createElement("p");
+      label.className = "timeline-step__label";
+      label.textContent = step.label;
+
+      const state = document.createElement("p");
+      state.className = "timeline-step__state";
+      state.textContent = step.state;
+
+      copy.append(label, state);
+      item.append(dot, copy);
+      timelineList.appendChild(item);
+    });
+  }
+
+  function renderWarningPanel(payload) {
+    if (!warningPanel || !warningTitle || !warningCopy) {
+      return;
+    }
+
+    const copy = payload.error_text || payload.warning_text;
+    if (!copy) {
+      warningPanel.hidden = true;
+      warningPanel.dataset.state = "neutral";
+      warningTitle.textContent = "";
+      warningCopy.textContent = "";
+      return;
+    }
+
+    const hasError = Boolean(payload.error_text);
+    warningPanel.hidden = false;
+    warningPanel.dataset.state = hasError ? "error" : "warning";
+    warningTitle.textContent = hasError ? "Failure reported" : "Warning";
+    warningCopy.textContent = copy;
+  }
+
+  function renderArtifacts(artifactDetails) {
     if (!artifactList) {
       return;
     }
     artifactList.innerHTML = "";
-    Object.entries(artifacts || {}).forEach(([name, url]) => {
+    Object.values(artifactDetails || {}).forEach((artifact) => {
       const item = document.createElement("li");
-      item.className = "artifact-item";
-      const link = document.createElement("a");
-      link.href = url;
-      link.textContent = name;
-      item.appendChild(link);
+      item.className = "artifact-card";
+      item.dataset.available = artifact.available ? "true" : "false";
+
+      const header = document.createElement("div");
+      header.className = "artifact-card__header";
+
+      const titleGroup = document.createElement("div");
+      const label = document.createElement("p");
+      label.className = "artifact-card__label";
+      label.textContent = artifact.label;
+      const name = document.createElement("p");
+      name.className = "artifact-card__name";
+      name.textContent = artifact.name;
+      titleGroup.append(label, name);
+
+      const stateChip = document.createElement("span");
+      stateChip.className = "artifact-card__state";
+      stateChip.textContent = artifact.available ? "Ready" : "Pending";
+      header.append(titleGroup, stateChip);
+
+      const meta = document.createElement("p");
+      meta.className = "artifact-card__meta";
+      meta.textContent = artifact.available
+        ? `${artifact.kind.replace("_", " ")} · ${artifact.size_label || "Available"}`
+        : `${artifact.kind.replace("_", " ")} · Waiting for export`;
+
+      item.append(header, meta);
+
+      if (artifact.available && artifact.url) {
+        const link = document.createElement("a");
+        link.className = "artifact-card__link";
+        link.href = artifact.url;
+        link.textContent = "Download";
+        item.appendChild(link);
+      }
+
       artifactList.appendChild(item);
     });
   }
@@ -310,7 +437,7 @@ function bindResultsPage() {
   function renderPayload(payload) {
     state.payload = payload;
     if (statusNode) {
-      statusNode.textContent = payload.status;
+      statusNode.textContent = payload.status_label || payload.status;
     }
     if (queueNode) {
       queueNode.textContent = payload.queue_position
@@ -321,10 +448,13 @@ function bindResultsPage() {
       messageNode.textContent = payload.warning_text || payload.error_text || "";
       messageNode.dataset.state = payload.error_text ? "error" : "info";
     }
+    renderReviewSummary(payload.job_summary, payload);
+    renderTimeline(payload.timeline);
+    renderWarningPanel(payload);
     tabs.forEach((tab) => {
       tab.toggleAttribute("data-active", tab.dataset.mode === state.mode);
     });
-    renderArtifacts(payload.artifacts);
+    renderArtifacts(payload.artifact_details);
     renderPreview(payload);
   }
 

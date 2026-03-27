@@ -88,3 +88,34 @@ def test_save_current_mask_resets_click_history_for_next_target(tmp_path):
     assert session.click_points == [(8, 8)]
     assert session.click_labels == [1]
     assert controller.calls[1][0].tolist() == [[8, 8]]
+
+
+def test_update_target_mutates_name_visibility_and_lock_state(tmp_path):
+    template_frame = tmp_path / "template.png"
+    Image.new("RGB", (4, 4), color=(0, 0, 0)).save(template_frame)
+    draft = DraftRecord(
+        draft_id="draft-1",
+        video_path=tmp_path / "input.mp4",
+        template_frame_path=template_frame,
+        width=4,
+        height=4,
+        fps=24.0,
+        frame_count=1,
+        duration_seconds=0.04,
+    )
+
+    service = MaskingService(runtime_root=tmp_path, controller_factory=lambda: None)
+    session = service.create_session(draft)
+    target = service.create_target(session, name="Hero")
+
+    updated = service.update_target(
+        session,
+        target.target_id,
+        name="Lead Actor",
+        visible=False,
+        locked=True,
+    )
+
+    assert updated.name == "Lead Actor"
+    assert updated.visible is False
+    assert updated.locked is True

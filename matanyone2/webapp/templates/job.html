@@ -52,14 +52,35 @@
       <p id="job-message" class="status-text" aria-live="polite"></p>
     </section>
 
-    <aside id="artifact-panel" class="panel sidebar-panel">
-      <div class="panel__header">
-        <p class="panel__eyebrow">Artifacts</p>
-        <h2 class="panel__title">Download set</h2>
-      </div>
+    <div class="results-sidebar">
+      <aside id="review-summary-panel" class="panel sidebar-panel">
+        <div class="panel__header">
+          <p class="panel__eyebrow">Review</p>
+          <h2 class="panel__title">Job inspection</h2>
+        </div>
 
-      <ul id="artifact-list" class="artifact-list"></ul>
-    </aside>
+        <dl id="review-summary-list" class="meta-list meta-list--stacked"></dl>
+
+        <div class="timeline-section">
+          <p class="panel__eyebrow">Pipeline</p>
+          <ol id="job-timeline" class="job-timeline"></ol>
+        </div>
+
+        <section id="warning-panel" class="warning-panel" hidden>
+          <p id="warning-title" class="warning-panel__title"></p>
+          <p id="warning-copy" class="status-text"></p>
+        </section>
+      </aside>
+
+      <aside id="artifact-panel" class="panel sidebar-panel">
+        <div class="panel__header">
+          <p class="panel__eyebrow">Artifacts</p>
+          <h2 class="panel__title">Download set</h2>
+        </div>
+
+        <ul id="artifact-summary-list" class="artifact-summary-list"></ul>
+      </aside>
+    </div>
   </div>
 </section>
 {% endblock %}

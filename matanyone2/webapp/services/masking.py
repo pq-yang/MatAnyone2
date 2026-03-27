@@ -63,6 +63,29 @@ class MaskingService:
         session.current_preview_path = None
         return session.select_target(target_id)
 
+    def update_target(
+        self,
+        session: DraftSession,
+        target_id: str,
+        *,
+        name: str | None = None,
+        visible: bool | None = None,
+        locked: bool | None = None,
+    ) -> AnnotationTarget:
+        target = session.targets.get(target_id)
+        if target is None:
+            raise KeyError(target_id)
+        if name is not None:
+            stripped = name.strip()
+            if not stripped:
+                raise ValueError("target name cannot be empty")
+            target.name = stripped
+        if visible is not None:
+            target.visible = visible
+        if locked is not None:
+            target.locked = locked
+        return target
+
     def set_stage(self, session: DraftSession, stage: str) -> str:
         if stage not in self.VALID_STAGES:
             raise ValueError(f"unknown stage: {stage}")

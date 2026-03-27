@@ -110,6 +110,40 @@ def test_target_creation_and_selection_round_trip(
     )
 
 
+def test_target_update_round_trip(
+    app_client: TestClient,
+    sample_video_upload,
+):
+    upload_response = app_client.post(
+        "/api/uploads",
+        files={"video": sample_video_upload},
+    )
+    draft_id = upload_response.json()["draft_id"]
+
+    create_response = app_client.post(
+        f"/api/drafts/{draft_id}/targets",
+        json={"name": "Hero"},
+    )
+    target_id = create_response.json()["target_id"]
+
+    update_response = app_client.patch(
+        f"/api/drafts/{draft_id}/targets/{target_id}",
+        json={"name": "Lead Actor", "visible": False, "locked": True},
+    )
+
+    assert update_response.status_code == 200
+    payload = update_response.json()
+    assert payload["active_target_id"] == target_id
+    assert payload["can_apply_clicks"] is False
+    assert any(
+        target["target_id"] == target_id
+        and target["name"] == "Lead Actor"
+        and target["visible"] is False
+        and target["locked"] is True
+        for target in payload["targets"]
+    )
+
+
 def test_stage_change_round_trip(
     app_client: TestClient,
     sample_video_upload,
@@ -357,3 +391,49 @@ def test_job_status_exposes_warning_and_error_text(app_client):
     assert failed_response.status_code == 200
     assert failed_response.json()["warning_text"] is None
     assert failed_response.json()["error_text"] == "gpu worker crashed"
+
+
+def test_job_status_exposes_review_summary_and_artifact_metadata(app_client):
+    repository = app_client.app.state.repository
+    runtime_root = app_client.app.state.settings.runtime_root
+    source_path = runtime_root / "inputs" / "hero.mp4"
+    source_path.parent.mkdir(parents=True, exist_ok=True)
+    source_path.write_bytes(b"source")
+
+    job = repository.create_job(
+        source_video_path=str(source_path),
+        template_frame_index=12,
+        mask_path="hero_mask.png",
+        params_json='{"template_frame_index": 12, "selected_masks": ["mask_001", "mask_002"]}',
+    )
+    repository.update_status(
+        job.job_id,
+        JobStatus.COMPLETED_WITH_WARNING,
+        warning_text="prores export skipped",
+    )
+
+    job_dir = runtime_root / "jobs" / job.job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+    (job_dir / "foreground.mp4").write_bytes(b"foreground-bytes")
+    (job_dir / "alpha.mp4").write_bytes(b"alpha-bytes")
+    (job_dir / "rgba_png.zip").write_bytes(b"zip-bytes")
+
+    response = app_client.get(f"/api/jobs/{job.job_id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status_label"] == "Completed with warning"
+    assert payload["job_summary"]["source_name"] == "hero.mp4"
+    assert payload["job_summary"]["template_frame_index"] == 12
+    assert payload["job_summary"]["selected_mask_count"] == 2
+    assert payload["job_summary"]["selected_masks"] == ["mask_001", "mask_002"]
+    assert [step["state"] for step in payload["timeline"]] == [
+        "complete",
+        "complete",
+        "complete",
+        "current",
+    ]
+    assert payload["artifact_details"]["foreground.mp4"]["label"] == "Foreground pass"
+    assert payload["artifact_details"]["foreground.mp4"]["size_bytes"] == len(b"foreground-bytes")
+    assert payload["artifact_details"]["rgba_png.zip"]["kind"] == "png_sequence"
+    assert payload["artifact_details"]["output_prores4444.mov"]["available"] is False

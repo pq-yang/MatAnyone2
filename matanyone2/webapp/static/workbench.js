@@ -119,21 +119,43 @@ function bindWorkbench() {
     });
   }
 
+  async function updateTarget(targetId, patch, pendingMessage, successMessage) {
+    setStatus(status, pendingMessage, false);
+    try {
+      const payload = await parseJson(
+        await fetch(`${root.dataset.targetsEndpoint}/${targetId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patch),
+        })
+      );
+      renderWorkbench(payload);
+      setStatus(status, successMessage(payload), false);
+    } catch (error) {
+      setStatus(status, error.message, true);
+    }
+  }
+
   function renderTargets(targets, activeTargetId) {
     if (!targetList) {
       return;
     }
     targetList.innerHTML = "";
     targets.forEach((target) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "target-card";
-      button.dataset.selected = target.target_id === activeTargetId ? "true" : "false";
-      button.innerHTML = `
+      const card = document.createElement("article");
+      card.className = "target-card";
+      card.dataset.selected = target.target_id === activeTargetId ? "true" : "false";
+      card.dataset.hidden = target.visible ? "false" : "true";
+      card.dataset.locked = target.locked ? "true" : "false";
+
+      const selectButton = document.createElement("button");
+      selectButton.type = "button";
+      selectButton.className = "target-card__select";
+      selectButton.innerHTML = `
         <span class="target-card__name">${target.name}</span>
-        <span class="target-card__meta">${target.point_count} point${target.point_count === 1 ? "" : "s"} - ${target.saved_mask_name || "unsaved"}</span>
+        <span class="target-card__meta">${target.point_count} point${target.point_count === 1 ? "" : "s"} · ${target.saved_mask_name || "unsaved"} · ${target.visible ? "visible" : "hidden"} · ${target.locked ? "locked" : "editable"}</span>
       `;
-      button.addEventListener("click", async () => {
+      selectButton.addEventListener("click", async () => {
         if (target.target_id === activeTargetId) {
           return;
         }
@@ -150,7 +172,58 @@ function bindWorkbench() {
           setStatus(status, error.message, true);
         }
       });
-      targetList.appendChild(button);
+
+      const actions = document.createElement("div");
+      actions.className = "target-card__actions";
+
+      const renameButton = document.createElement("button");
+      renameButton.type = "button";
+      renameButton.className = "target-chip";
+      renameButton.textContent = "Rename";
+      renameButton.addEventListener("click", () => {
+        const nextName = window.prompt("Rename target layer", target.name);
+        if (nextName === null || nextName.trim() === "" || nextName.trim() === target.name) {
+          return;
+        }
+        updateTarget(
+          target.target_id,
+          { name: nextName.trim() },
+          `Renaming ${target.name}...`,
+          () => `Renamed target to ${nextName.trim()}.`
+        );
+      });
+
+      const visibilityButton = document.createElement("button");
+      visibilityButton.type = "button";
+      visibilityButton.className = "target-chip";
+      visibilityButton.textContent = target.visible ? "Hide" : "Show";
+      visibilityButton.addEventListener("click", () => {
+        const nextVisible = !target.visible;
+        updateTarget(
+          target.target_id,
+          { visible: nextVisible },
+          `${nextVisible ? "Showing" : "Hiding"} ${target.name}...`,
+          () => `${target.name} is now ${nextVisible ? "visible" : "hidden"}.`
+        );
+      });
+
+      const lockButton = document.createElement("button");
+      lockButton.type = "button";
+      lockButton.className = "target-chip";
+      lockButton.textContent = target.locked ? "Unlock" : "Lock";
+      lockButton.addEventListener("click", () => {
+        const nextLocked = !target.locked;
+        updateTarget(
+          target.target_id,
+          { locked: nextLocked },
+          `${nextLocked ? "Locking" : "Unlocking"} ${target.name}...`,
+          () => `${target.name} is now ${nextLocked ? "locked" : "editable"}.`
+        );
+      });
+
+      actions.append(renameButton, visibilityButton, lockButton);
+      card.append(selectButton, actions);
+      targetList.appendChild(card);
     });
   }
 
@@ -252,7 +325,9 @@ function bindWorkbench() {
       inspectorStage.textContent = payload.stage_label || payload.stage;
     }
     if (inspectorTarget) {
-      inspectorTarget.textContent = currentTarget?.name || "-";
+      inspectorTarget.textContent = currentTarget
+        ? `${currentTarget.name}${currentTarget.locked ? " · Locked" : ""}${currentTarget.visible ? "" : " · Hidden"}`
+        : "-";
     }
     if (inspectorPoints) {
       inspectorPoints.textContent = String(currentTarget?.point_count || 0);

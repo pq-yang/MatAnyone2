@@ -26,6 +26,12 @@ class DraftTargetCreatePayload(BaseModel):
     name: str | None = None
 
 
+class DraftTargetUpdatePayload(BaseModel):
+    name: str | None = None
+    visible: bool | None = None
+    locked: bool | None = None
+
+
 class DraftStagePayload(BaseModel):
     stage: str
 
@@ -90,17 +96,23 @@ def _active_mask_url(session, draft_id: str):
 
 def _workbench_payload(session, draft_id: str):
     stage_meta = STAGE_PRESENTATION[session.stage]
+    active_target = session.active_target
+    target_locked = active_target.locked
     return {
         "draft_id": draft_id,
         "stage": session.stage,
         "stage_label": stage_meta["stage_label"],
         "canvas_mode_label": stage_meta["canvas_mode_label"],
         "stage_note": stage_meta["stage_note"],
-        "can_apply_clicks": session.stage != "preview",
+        "can_apply_clicks": session.stage != "preview" and not target_locked,
         "can_create_target": session.stage != "preview",
-        "can_save_current_target": session.current_mask_path is not None,
-        "can_undo_clicks": session.stage != "preview" and len(session.click_points) > 0,
-        "can_reset_target": session.stage != "preview" and len(session.click_points) > 0,
+        "can_save_current_target": session.current_mask_path is not None and not target_locked,
+        "can_undo_clicks": (
+            session.stage != "preview" and not target_locked and len(session.click_points) > 0
+        ),
+        "can_reset_target": (
+            session.stage != "preview" and not target_locked and len(session.click_points) > 0
+        ),
         "can_submit": bool(session.selected_mask_names),
         "active_target_id": session.active_target_id,
         "template_frame_url": f"/api/drafts/{draft_id}/template-frame",
@@ -156,6 +168,30 @@ def select_target(
         masking_service.select_target(session, target_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"target not found: {target_id}") from exc
+    return _workbench_payload(session, draft_id)
+
+
+@router.patch("/api/drafts/{draft_id}/targets/{target_id}")
+def update_target(
+    draft_id: str,
+    target_id: str,
+    payload: DraftTargetUpdatePayload,
+    draft_store=Depends(get_draft_store),
+    masking_service=Depends(get_masking_service),
+):
+    session = _require_session(draft_store, draft_id)
+    try:
+        masking_service.update_target(
+            session,
+            target_id,
+            name=payload.name,
+            visible=payload.visible,
+            locked=payload.locked,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"target not found: {target_id}") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _workbench_payload(session, draft_id)
 
 

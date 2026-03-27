@@ -62,3 +62,7 @@ def test_job_page_renders_review_viewport(app_client: TestClient):
     assert 'id="preview-overlay-canvas"' in response.text
     assert 'id="overlay-foreground-video"' in response.text
     assert 'id="overlay-alpha-video"' in response.text
+    assert 'id="review-summary-panel"' in response.text
+    assert 'id="job-timeline"' in response.text
+    assert 'id="artifact-summary-list"' in response.text
+    assert 'id="warning-panel"' in response.text
