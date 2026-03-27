@@ -1,4 +1,5 @@
 import json
+import mimetypes
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
@@ -140,6 +141,9 @@ def _workbench_payload(session, draft_id: str):
         "active_target_id": session.active_target_id,
         "template_frame_index": session.draft.template_frame_index,
         "frame_count": session.draft.frame_count,
+        "fps": session.draft.fps,
+        "duration_seconds": session.draft.duration_seconds,
+        "source_video_url": f"/api/drafts/{draft_id}/source-video",
         "can_change_template_frame": session.stage != "preview",
         "template_frame_url": f"/api/drafts/{draft_id}/template-frame",
         "current_mask_url": (
@@ -425,6 +429,17 @@ def get_current_preview(draft_id: str, draft_store=Depends(get_draft_store)):
         session.current_preview_path,
         media_type="image/png",
         filename=session.current_preview_path.name,
+    )
+
+
+@router.get("/api/drafts/{draft_id}/source-video")
+def get_source_video(draft_id: str, draft_store=Depends(get_draft_store)):
+    session = _require_session(draft_store, draft_id)
+    video_path = session.draft.video_path
+    return FileResponse(
+        video_path,
+        media_type=mimetypes.guess_type(video_path.name)[0] or "video/mp4",
+        filename=video_path.name,
     )
 
 

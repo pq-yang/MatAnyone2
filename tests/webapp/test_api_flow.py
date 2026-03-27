@@ -244,6 +244,28 @@ def test_template_frame_selection_round_trip(
     assert update_response.json()["template_frame_url"] == f"/api/drafts/{draft_id}/template-frame"
 
 
+def test_workbench_exposes_source_video_scrubber_contract(
+    app_client: TestClient,
+    sample_video_upload,
+):
+    upload_response = app_client.post(
+        "/api/uploads",
+        files={"video": sample_video_upload},
+    )
+    draft_id = upload_response.json()["draft_id"]
+
+    state_response = app_client.get(f"/api/drafts/{draft_id}")
+    payload = state_response.json()
+    video_response = app_client.get(payload["source_video_url"])
+
+    assert state_response.status_code == 200
+    assert payload["source_video_url"] == f"/api/drafts/{draft_id}/source-video"
+    assert payload["fps"] == 3.0
+    assert payload["duration_seconds"] == 1.0
+    assert video_response.status_code == 200
+    assert video_response.headers["content-type"].startswith("video/")
+
+
 def test_target_preset_change_rebuilds_current_mask_preview(
     app_client: TestClient,
     sample_video_upload,
@@ -263,6 +285,34 @@ def test_target_preset_change_rebuilds_current_mask_preview(
     update_response = app_client.patch(
         f"/api/drafts/{draft_id}/targets/target-001",
         json={"refine_preset": "hair"},
+    )
+    updated_mask = app_client.get(f"/api/drafts/{draft_id}/current-mask").content
+
+    assert update_response.status_code == 200
+    assert update_response.json()["current_mask_url"] is not None
+    assert update_response.json()["current_preview_url"] is not None
+    assert updated_mask != initial_mask
+
+
+def test_temporal_stability_change_rebuilds_current_mask_render(
+    app_client: TestClient,
+    sample_video_upload,
+):
+    upload_response = app_client.post(
+        "/api/uploads",
+        files={"video": sample_video_upload},
+    )
+    draft_id = upload_response.json()["draft_id"]
+
+    app_client.post(
+        f"/api/drafts/{draft_id}/click",
+        json={"x": 1, "y": 1, "positive": True},
+    )
+    initial_mask = app_client.get(f"/api/drafts/{draft_id}/current-mask").content
+
+    update_response = app_client.patch(
+        f"/api/drafts/{draft_id}/targets/target-001",
+        json={"temporal_stability": 1.0},
     )
     updated_mask = app_client.get(f"/api/drafts/{draft_id}/current-mask").content
 

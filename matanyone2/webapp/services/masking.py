@@ -288,6 +288,7 @@ class MaskingService:
             refine_preset is not None
             or preset_strength is not None
             or motion_strength is not None
+            or temporal_stability is not None
         ):
             self._rerender_current_from_base(session)
         return target
@@ -409,6 +410,50 @@ class MaskingService:
 
         return np.where(np.array(processed, dtype=np.uint8) > 127, 255, 0).astype(np.uint8)
 
+    def apply_temporal_stability_preview(
+        self,
+        mask: np.ndarray,
+        *,
+        temporal_stability: float = 0.0,
+    ) -> np.ndarray:
+        temporal_stability = self._validate_unit_interval(
+            temporal_stability,
+            field_name="temporal_stability",
+        )
+        binary_mask = np.where(mask > 127, 255, 0).astype(np.uint8)
+        if temporal_stability <= 0:
+            return binary_mask
+
+        blur_radius = 0.6 + (temporal_stability * 2.8)
+        blurred = Image.fromarray(binary_mask, mode="L").filter(
+            ImageFilter.GaussianBlur(radius=blur_radius)
+        )
+        threshold = max(72, int(round(152 - (temporal_stability * 64))))
+        stabilized = np.where(np.array(blurred, dtype=np.uint8) >= threshold, 255, 0).astype(np.uint8)
+
+        filter_size = self._odd_kernel_size(3 + int(round(temporal_stability * 4)))
+        stabilized_image = Image.fromarray(stabilized, mode="L")
+        stabilized_image = stabilized_image.filter(ImageFilter.MaxFilter(filter_size))
+        stabilized_image = stabilized_image.filter(ImageFilter.MinFilter(filter_size))
+        return np.where(np.array(stabilized_image, dtype=np.uint8) > 127, 255, 0).astype(np.uint8)
+
+    def apply_target_controls(
+        self,
+        mask: np.ndarray,
+        target: AnnotationTarget,
+    ) -> np.ndarray:
+        refined_mask = self.apply_refine_preset(
+            mask,
+            target.refine_preset,
+            preset_strength=target.preset_strength,
+            motion_strength=target.motion_strength,
+        )
+        temporal_input = refined_mask if np.any(refined_mask > 0) else np.where(mask > 127, 255, 0).astype(np.uint8)
+        return self.apply_temporal_stability_preview(
+            temporal_input,
+            temporal_stability=target.temporal_stability,
+        )
+
     def reset_session_for_template_frame(self, session: DraftSession, *, frame_index: int) -> None:
         session.targets = {}
         session.active_target_id = None
@@ -448,12 +493,7 @@ class MaskingService:
         mask_name = f"mask_{len(session.saved_masks) + 1:03d}"
         saved_mask_path = session.session_dir / f"{mask_name}.png"
         current_mask = self._load_current_base_mask(session)
-        processed_mask = self.apply_refine_preset(
-            current_mask,
-            session.active_target.refine_preset,
-            preset_strength=session.active_target.preset_strength,
-            motion_strength=session.active_target.motion_strength,
-        )
+        processed_mask = self.apply_target_controls(current_mask, session.active_target)
         Image.fromarray(processed_mask, mode="L").save(saved_mask_path)
         session.saved_masks[mask_name] = saved_mask_path
         session.saved_mask_presets[mask_name] = session.active_target.refine_preset
@@ -516,13 +556,7 @@ class MaskingService:
         current_preview_path = session.session_dir / "current_preview.png"
         base_mask = np.where(mask > 0, 255, 0).astype(np.uint8)
         Image.fromarray(base_mask, mode="L").save(current_mask_base_path)
-        display_mask = self.apply_refine_preset(base_mask, session.active_target.refine_preset)
-        display_mask = self.apply_refine_preset(
-            base_mask,
-            session.active_target.refine_preset,
-            preset_strength=session.active_target.preset_strength,
-            motion_strength=session.active_target.motion_strength,
-        )
+        display_mask = self.apply_target_controls(base_mask, session.active_target)
         Image.fromarray(display_mask, mode="L").save(current_mask_path)
 
         image = np.array(Image.open(session.draft.template_frame_path).convert("RGB"))

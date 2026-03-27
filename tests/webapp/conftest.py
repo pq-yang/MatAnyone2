@@ -46,7 +46,11 @@ def app_client(tmp_path) -> TestClient:
         def first_frame_click(self, image, points, labels, multimask=True):
             mask = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
             for x, y in points.tolist():
-                mask[y, x] = 1
+                y0 = max(0, y - 1)
+                y1 = min(image.shape[0], y + 2)
+                x0 = max(0, x - 1)
+                x1 = min(image.shape[1], x + 2)
+                mask[y0:y1, x0:x1] = 1
             return mask, np.zeros_like(mask, dtype=np.float32), Image.fromarray(image)
 
     app.state.masking_service = MaskingService(

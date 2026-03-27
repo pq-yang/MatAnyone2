@@ -1,4 +1,5 @@
 import {
+  formatDuration,
   parseJson,
   setStatus,
   withCacheBust,
@@ -70,12 +71,18 @@ function bindWorkbench() {
   const templateFrameSlider = document.getElementById("template-frame-slider");
   const templateFrameValue = document.getElementById("template-frame-value");
   const applyTemplateFrameButton = document.getElementById("apply-template-frame");
+  const keyframeVideo = document.getElementById("keyframe-video");
+  const keyframeSelectedLabel = document.getElementById("keyframe-selected-label");
+  const keyframeAppliedLabel = document.getElementById("keyframe-applied-label");
+  const keyframeTimeLabel = document.getElementById("keyframe-time-label");
   const presetStrengthInput = document.getElementById("preset-strength");
   const presetStrengthValue = document.getElementById("preset-strength-value");
   const motionStrengthInput = document.getElementById("motion-strength");
   const motionStrengthValue = document.getElementById("motion-strength-value");
   const temporalStabilityInput = document.getElementById("temporal-stability");
   const temporalStabilityValue = document.getElementById("temporal-stability-value");
+  const previewBeforeImage = document.getElementById("preview-before-image");
+  const previewLiveImage = document.getElementById("preview-live-image");
 
   const state = {
     activeTool: "point-positive",
@@ -85,6 +92,14 @@ function bindWorkbench() {
     brushRadius: Number(brushRadiusInput?.value || 28),
     overlayOpacity: Number(overlayOpacityInput?.value || 72),
     templateFrameSelection: Number(templateFrameSlider?.value || 0),
+    templateFrameApplied: Number(templateFrameSlider?.value || 0),
+    fps: Number(root.dataset.fps || 0),
+    durationSeconds: Number(root.dataset.durationSeconds || 0),
+    livePatchTimer: null,
+    livePatchRevision: 0,
+    lastAppliedLivePatchRevision: 0,
+    compareBeforeSrc: root.dataset.templateFrameUrl || "",
+    compareLiveSrc: root.dataset.templateFrameUrl || "",
   };
 
   const STAGE_ORDER = ["coarse", "refine", "preview"];
@@ -120,6 +135,73 @@ function bindWorkbench() {
     }
     outputElement.value = `${value}${suffix}`;
     outputElement.textContent = `${value}${suffix}`;
+  }
+
+  function frameToSeconds(frameIndex, payload = state.workbench) {
+    const fps = Number(payload?.fps || state.fps || 0);
+    if (!Number.isFinite(fps) || fps <= 0) {
+      return 0;
+    }
+    return frameIndex / fps;
+  }
+
+  function formatFrameTimestamp(frameIndex, payload = state.workbench) {
+    return formatDuration(frameToSeconds(frameIndex, payload));
+  }
+
+  function syncCompareStrip(payload = state.workbench) {
+    if (!previewBeforeImage || !previewLiveImage || !payload) {
+      return;
+    }
+    const liveSrc = image?.src || withCacheBust(resolveCanvasUrl(payload));
+    if (!state.compareBeforeSrc) {
+      state.compareBeforeSrc = liveSrc;
+    }
+    state.compareLiveSrc = liveSrc;
+    previewBeforeImage.src = state.compareBeforeSrc;
+    previewLiveImage.src = state.compareLiveSrc;
+  }
+
+  function syncKeyframeSummary(payload) {
+    if (!payload) {
+      return;
+    }
+    state.fps = Number(payload.fps || state.fps || 0);
+    state.durationSeconds = Number(payload.duration_seconds || state.durationSeconds || 0);
+    state.templateFrameApplied = Number(payload.template_frame_index || 0);
+    if (state.templateFrameSelection === undefined || Number.isNaN(state.templateFrameSelection)) {
+      state.templateFrameSelection = state.templateFrameApplied;
+    }
+
+    if (templateFrameSlider) {
+      templateFrameSlider.max = String(Math.max(0, (payload.frame_count || 1) - 1));
+      templateFrameSlider.value = String(state.templateFrameSelection);
+    }
+    updateRangeOutput(templateFrameValue, Number(state.templateFrameSelection || 0), "");
+
+    if (keyframeSelectedLabel) {
+      keyframeSelectedLabel.textContent = `Selected frame ${state.templateFrameSelection}`;
+    }
+    if (keyframeAppliedLabel) {
+      keyframeAppliedLabel.textContent = `Applied frame ${state.templateFrameApplied}`;
+    }
+    if (keyframeTimeLabel) {
+      keyframeTimeLabel.textContent = `${formatFrameTimestamp(state.templateFrameSelection, payload)} / ${formatDuration(payload.duration_seconds || 0)}`;
+    }
+
+    if (keyframeVideo) {
+      if (!keyframeVideo.src) {
+        keyframeVideo.src = root.dataset.sourceVideoUrl;
+      }
+      const desiredTime = frameToSeconds(state.templateFrameSelection, payload);
+      if (Number.isFinite(desiredTime) && Math.abs((keyframeVideo.currentTime || 0) - desiredTime) > 0.04) {
+        try {
+          keyframeVideo.currentTime = desiredTime;
+        } catch (_error) {
+          // Ignore transient seek failures before metadata is ready.
+        }
+      }
+    }
   }
 
   function syncTargetControls(payload) {
@@ -223,18 +305,22 @@ function bindWorkbench() {
   async function updateTarget(targetId, patch, pendingMessage, successMessage) {
     setStatus(status, pendingMessage, false);
     try {
-      const payload = await parseJson(
-        await fetch(`${root.dataset.targetsEndpoint}/${targetId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(patch),
-        })
-      );
+      const payload = await requestTargetPatch(targetId, patch);
       renderWorkbench(payload);
       setStatus(status, successMessage(payload), false);
     } catch (error) {
       setStatus(status, error.message, true);
     }
+  }
+
+  async function requestTargetPatch(targetId, patch) {
+    return parseJson(
+      await fetch(`${root.dataset.targetsEndpoint}/${targetId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      })
+    );
   }
 
   function renderTargets(targets, activeTargetId) {
@@ -413,12 +499,15 @@ function bindWorkbench() {
   function renderWorkbench(payload) {
     state.workbench = payload;
     syncSelectedMasks(payload);
-    state.templateFrameSelection = Number(payload.template_frame_index || 0);
+    if (state.templateFrameSelection === state.templateFrameApplied) {
+      state.templateFrameSelection = Number(payload.template_frame_index || 0);
+    }
 
     const currentTarget = activeTarget(payload);
     syncTargetControls(payload);
 
     syncCanvasMode(payload);
+    syncCompareStrip(payload);
     syncPresetButtons(payload);
 
     if (canvasStageNote) {
@@ -462,11 +551,7 @@ function bindWorkbench() {
       targetNameInput.value = currentTarget.name;
       targetNameInput.disabled = false;
     }
-    if (templateFrameSlider) {
-      templateFrameSlider.max = String(Math.max(0, (payload.frame_count || 1) - 1));
-      templateFrameSlider.value = String(payload.template_frame_index || 0);
-    }
-    updateRangeOutput(templateFrameValue, Number(payload.template_frame_index || 0), "");
+    syncKeyframeSummary(payload);
     if (targetSummary) {
       targetSummary.textContent = currentTarget
         ? `${currentTarget.name} is ${currentTarget.visible ? "visible" : "hidden"}, ${currentTarget.locked ? "locked" : "editable"}, and uses the ${PRESET_META[currentTarget.refine_preset]?.label || "Balanced"} preset.`
@@ -526,9 +611,36 @@ function bindWorkbench() {
 
   templateFrameSlider?.addEventListener("input", () => {
     state.templateFrameSelection = Number(templateFrameSlider.value);
-    updateRangeOutput(templateFrameValue, state.templateFrameSelection, "");
+    syncKeyframeSummary(state.workbench);
     syncActionState(state.workbench);
   });
+
+  function syncSelectionFromVideo() {
+    const payload = state.workbench;
+    if (!payload) {
+      return;
+    }
+    const fps = Number(payload.fps || state.fps || 0);
+    if (!Number.isFinite(fps) || fps <= 0) {
+      return;
+    }
+    const nextFrame = Math.max(
+      0,
+      Math.min(
+        Number(payload.frame_count || 1) - 1,
+        Math.round((keyframeVideo.currentTime || 0) * fps)
+      )
+    );
+    state.templateFrameSelection = nextFrame;
+    syncKeyframeSummary(payload);
+    syncActionState(payload);
+  }
+
+  keyframeVideo?.addEventListener("loadedmetadata", () => {
+    syncKeyframeSummary(state.workbench);
+  });
+  keyframeVideo?.addEventListener("seeked", syncSelectionFromVideo);
+  keyframeVideo?.addEventListener("timeupdate", syncSelectionFromVideo);
 
   async function patchActiveTarget(patch, pendingMessage, successMessage) {
     const currentTarget = activeTarget();
@@ -543,35 +655,57 @@ function bindWorkbench() {
     );
   }
 
+  function scheduleLiveTargetPatch(patch, pendingMessage, successMessage) {
+    const currentTarget = activeTarget();
+    if (!currentTarget) {
+      return;
+    }
+    if (state.livePatchTimer) {
+      clearTimeout(state.livePatchTimer);
+    }
+
+    const baselineSrc = image?.src || state.compareLiveSrc || withCacheBust(resolveCanvasUrl(state.workbench));
+    state.livePatchTimer = window.setTimeout(async () => {
+      const revision = ++state.livePatchRevision;
+      setStatus(status, pendingMessage, false);
+      try {
+        const payload = await requestTargetPatch(currentTarget.target_id, patch);
+        if (revision < state.lastAppliedLivePatchRevision) {
+          return;
+        }
+        state.lastAppliedLivePatchRevision = revision;
+        state.compareBeforeSrc = baselineSrc;
+        renderWorkbench(payload);
+        setStatus(status, successMessage(payload), false);
+      } catch (error) {
+        setStatus(status, error.message, true);
+      }
+    }, 140);
+  }
+
   presetStrengthInput?.addEventListener("input", () => {
     updateRangeOutput(presetStrengthValue, Number(presetStrengthInput.value));
-  });
-  presetStrengthInput?.addEventListener("change", async () => {
-    await patchActiveTarget(
+    scheduleLiveTargetPatch(
       { preset_strength: Number(presetStrengthInput.value) / 100 },
-      "Updating preset strength...",
+      "Refreshing live detail preview...",
       () => "Preset strength updated."
     );
   });
 
   motionStrengthInput?.addEventListener("input", () => {
     updateRangeOutput(motionStrengthValue, Number(motionStrengthInput.value));
-  });
-  motionStrengthInput?.addEventListener("change", async () => {
-    await patchActiveTarget(
+    scheduleLiveTargetPatch(
       { motion_strength: Number(motionStrengthInput.value) / 100 },
-      "Updating motion softness...",
+      "Refreshing live detail preview...",
       () => "Motion softness updated."
     );
   });
 
   temporalStabilityInput?.addEventListener("input", () => {
     updateRangeOutput(temporalStabilityValue, Number(temporalStabilityInput.value));
-  });
-  temporalStabilityInput?.addEventListener("change", async () => {
-    await patchActiveTarget(
+    scheduleLiveTargetPatch(
       { temporal_stability: Number(temporalStabilityInput.value) / 100 },
-      "Updating temporal stability...",
+      "Refreshing live detail preview...",
       () => "Temporal stability updated."
     );
   });

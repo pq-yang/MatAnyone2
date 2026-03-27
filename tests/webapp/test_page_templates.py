@@ -46,12 +46,17 @@ def test_annotation_page_renders_workbench_layout(
     assert 'id="stage-back"' in response.text
     assert 'id="stage-forward"' in response.text
     assert 'id="template-frame-slider"' in response.text
+    assert 'id="keyframe-video"' in response.text
+    assert 'id="keyframe-selection-summary"' in response.text
     assert 'id="apply-template-frame"' in response.text
     assert 'id="brush-radius"' in response.text
     assert 'id="overlay-opacity"' in response.text
     assert 'id="preset-strength"' in response.text
     assert 'id="motion-strength"' in response.text
     assert 'id="temporal-stability"' in response.text
+    assert 'id="preview-compare-strip"' in response.text
+    assert 'id="preview-before-image"' in response.text
+    assert 'id="preview-live-image"' in response.text
     assert 'id="canvas-stage-note"' in response.text
     assert 'id="stage-guidance-title"' in response.text
     assert 'id="stage-guidance-copy"' in response.text

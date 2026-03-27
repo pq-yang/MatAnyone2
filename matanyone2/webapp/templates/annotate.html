@@ -16,6 +16,9 @@
   data-save-endpoint="/api/drafts/{{ draft_id }}/masks"
   data-submit-endpoint="/api/drafts/{{ draft_id }}/submit"
   data-job-page-prefix="/jobs/"
+  data-source-video-url="/api/drafts/{{ draft_id }}/source-video"
+  data-fps="{{ draft.fps }}"
+  data-duration-seconds="{{ draft.duration_seconds }}"
 >
   <aside id="workflow-panel" class="panel workbench-workflow">
     <div class="panel__header workflow-header">
@@ -74,16 +77,32 @@
         </button>
       </div>
       <div class="slider-stack">
+        <div class="keyframe-video-shell">
+          <video
+            id="keyframe-video"
+            class="keyframe-video"
+            src="/api/drafts/{{ draft_id }}/source-video"
+            preload="metadata"
+            muted
+            playsinline
+            controls
+          ></video>
+        </div>
         <label class="workflow-field" for="template-frame-slider">
           <span class="workflow-field__label">
-            Frame
+            Anchor frame
             <output id="template-frame-value" for="template-frame-slider">0</output>
           </span>
           <input id="template-frame-slider" type="range" min="0" max="{{ draft.frame_count - 1 }}" value="{{ draft.template_frame_index }}">
         </label>
+        <div id="keyframe-selection-summary" class="keyframe-selection-summary">
+          <span id="keyframe-selected-label">Selected frame 0</span>
+          <span id="keyframe-applied-label">Applied frame {{ draft.template_frame_index }}</span>
+          <span id="keyframe-time-label">00:00 / 00:00</span>
+        </div>
       </div>
       <p class="panel-note">
-        Pick the frame where the silhouette reads best. The queued job will propagate from that frame forward and backward before stitching the result.
+        Scrub to the frame where the silhouette reads best, then apply it as the segmentation anchor. The queued job will propagate from that frame forward and backward before stitching the result.
       </p>
     </section>
 
@@ -311,6 +330,17 @@
           alt="Template frame for {{ draft_id }}"
         >
       </div>
+
+      <section id="preview-compare-strip" class="preview-compare-strip" aria-label="Live preview comparison">
+        <article class="preview-compare-card">
+          <p class="panel__eyebrow">Before</p>
+          <img id="preview-before-image" src="{{ template_frame_url }}" alt="Previous preview state">
+        </article>
+        <article class="preview-compare-card">
+          <p class="panel__eyebrow">Live</p>
+          <img id="preview-live-image" src="{{ template_frame_url }}" alt="Current preview state">
+        </article>
+      </section>
 
       <div class="canvas-toolbar">
         <button id="save-mask" class="button button--ghost" type="button">Save Current Target</button>
