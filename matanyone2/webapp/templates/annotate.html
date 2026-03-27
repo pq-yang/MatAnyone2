@@ -284,8 +284,18 @@
       </div>
 
       <div class="canvas-frame">
+        <video
+          id="keyframe-video"
+          class="canvas-media canvas-media--video"
+          src="/api/drafts/{{ draft_id }}/source-video"
+          preload="metadata"
+          muted
+          playsinline
+          hidden
+        ></video>
         <img
           id="annotation-image"
+          class="canvas-media canvas-media--image"
           src="{{ template_frame_url }}"
           alt="Template frame for {{ draft_id }}"
         >
@@ -301,17 +311,6 @@
             Apply Frame
           </button>
         </div>
-        <div class="keyframe-video-shell">
-          <video
-            id="keyframe-video"
-            class="keyframe-video"
-            src="/api/drafts/{{ draft_id }}/source-video"
-            preload="metadata"
-            muted
-            playsinline
-            controls
-          ></video>
-        </div>
         <label class="workflow-field" for="template-frame-slider">
           <span class="workflow-field__label">
             Anchor frame
@@ -325,7 +324,7 @@
           <span id="keyframe-time-label">00:00 / 00:00</span>
         </div>
         <p class="panel-note">
-          在主画布里直接选一帧作为抠像起点。提交后会从这帧向前和向后分别推理，再拼接完整结果。
+          直接在上方主画布视频里选一帧作为抠像起点。提交后会从这帧向前和向后分别推理，再拼接完整结果。
         </p>
       </section>
 

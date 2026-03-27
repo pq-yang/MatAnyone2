@@ -49,6 +49,8 @@ def test_annotation_page_renders_workbench_layout(
     assert 'id="keyframe-video"' in response.text
     assert 'id="keyframe-selection-summary"' in response.text
     assert 'id="apply-template-frame"' in response.text
+    assert 'class="keyframe-video-shell"' not in response.text
+    assert response.text.index('id="keyframe-video"') < response.text.index('id="canvas-keyframe-panel"')
     assert 'id="brush-radius"' in response.text
     assert 'id="overlay-opacity"' in response.text
     assert 'id="preset-strength"' in response.text

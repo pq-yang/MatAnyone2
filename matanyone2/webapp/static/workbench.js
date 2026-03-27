@@ -32,6 +32,7 @@ function bindWorkbench() {
 
   const status = document.getElementById("annotator-status");
   const image = document.getElementById("annotation-image");
+  const canvasFrame = root.querySelector(".canvas-frame");
   const saveButton = document.getElementById("save-mask");
   const submitButton = document.getElementById("submit-job");
   const createTargetButton = document.getElementById("create-target");
@@ -224,14 +225,19 @@ function bindWorkbench() {
   }
 
   function applyImagePresentation() {
-    if (!image) {
+    if (!image || !keyframeVideo) {
       return;
     }
-    if (state.canvasMode === "source") {
+    const showVideo = state.canvasMode === "source";
+    keyframeVideo.hidden = !showVideo;
+    image.hidden = showVideo;
+    canvasFrame?.setAttribute("data-canvas-mode", state.canvasMode);
+
+    if (showVideo) {
       image.style.opacity = "1";
-    } else {
-      image.style.opacity = String(state.overlayOpacity / 100);
+      return;
     }
+    image.style.opacity = String(state.overlayOpacity / 100);
   }
 
   function syncSelectedMasks(payload) {

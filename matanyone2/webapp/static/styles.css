@@ -481,20 +481,6 @@ button {
   gap: var(--space-3);
 }
 
-.keyframe-video-shell {
-  overflow: hidden;
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(5, 10, 16, 0.88);
-}
-
-.keyframe-video {
-  display: block;
-  width: 100%;
-  max-height: 14rem;
-  background: #03060a;
-}
-
 .keyframe-selection-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -652,6 +638,9 @@ button {
 }
 
 .canvas-frame {
+  display: grid;
+  place-items: center;
+  min-height: min(68vh, 52rem);
   padding: var(--space-4);
   border-radius: calc(var(--radius-xl) - 10px);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -663,6 +652,18 @@ button {
     rgba(7, 12, 20, 0.72);
   background-size: 24px 24px;
   background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+}
+
+.canvas-media {
+  width: 100%;
+  max-height: 68vh;
+  object-fit: contain;
+  border-radius: calc(var(--radius-lg) - 6px);
+  background: #03060a;
+}
+
+.canvas-media[hidden] {
+  display: none;
 }
 
 .preview-compare-strip {
@@ -697,9 +698,6 @@ button {
 }
 
 #annotation-image {
-  width: 100%;
-  max-height: 68vh;
-  object-fit: contain;
   transition: opacity 160ms ease, box-shadow 160ms ease;
 }
 
