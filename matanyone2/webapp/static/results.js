@@ -21,6 +21,7 @@ function bindResultsPage() {
   const queueNode = document.getElementById("job-queue-position");
   const messageNode = document.getElementById("job-message");
   const artifactList = document.getElementById("artifact-summary-list");
+  const targetReviewList = document.getElementById("target-review-list");
   const reviewSummaryList = document.getElementById("review-summary-list");
   const timelineList = document.getElementById("job-timeline");
   const warningPanel = document.getElementById("warning-panel");
@@ -225,6 +226,67 @@ function bindResultsPage() {
       }
 
       artifactList.appendChild(item);
+    });
+  }
+
+  function renderTargetReview(summary) {
+    if (!targetReviewList) {
+      return;
+    }
+
+    const selectedMasks = Array.isArray(summary?.selected_masks) ? summary.selected_masks : [];
+    const presetMap = summary?.selected_mask_presets || {};
+    targetReviewList.innerHTML = "";
+
+    if (selectedMasks.length === 0) {
+      const empty = document.createElement("li");
+      empty.className = "target-review-card target-review-card--empty";
+      empty.textContent = "No saved targets were selected for this job.";
+      targetReviewList.appendChild(empty);
+      return;
+    }
+
+    selectedMasks.forEach((maskName, index) => {
+      const item = document.createElement("li");
+      item.className = "target-review-card";
+
+      const header = document.createElement("div");
+      header.className = "target-review-card__header";
+
+      const nameGroup = document.createElement("div");
+      const title = document.createElement("p");
+      title.className = "target-review-card__title";
+      title.textContent = `Target ${index + 1}`;
+      const subtitle = document.createElement("p");
+      subtitle.className = "target-review-card__subtitle";
+      subtitle.textContent = maskName;
+      nameGroup.append(title, subtitle);
+
+      const chip = document.createElement("span");
+      chip.className = "artifact-card__state";
+      chip.textContent = "Included";
+
+      header.append(nameGroup, chip);
+
+      const meta = document.createElement("dl");
+      meta.className = "target-review-meta";
+
+      [
+        ["Mask", maskName],
+        ["Preset", presetMap[maskName] || "balanced"],
+        ["Export", "Merged into current job"],
+      ].forEach(([labelText, valueText]) => {
+        const row = document.createElement("div");
+        const dt = document.createElement("dt");
+        const dd = document.createElement("dd");
+        dt.textContent = labelText;
+        dd.textContent = valueText;
+        row.append(dt, dd);
+        meta.appendChild(row);
+      });
+
+      item.append(header, meta);
+      targetReviewList.appendChild(item);
     });
   }
 
@@ -458,6 +520,7 @@ function bindResultsPage() {
       messageNode.dataset.state = payload.error_text ? "error" : "info";
     }
     renderReviewSummary(payload.job_summary, payload);
+    renderTargetReview(payload.job_summary);
     renderTimeline(payload.timeline);
     renderWarningPanel(payload);
     tabs.forEach((tab) => {
