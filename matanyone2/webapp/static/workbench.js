@@ -4,6 +4,25 @@ import {
   withCacheBust,
 } from "/static/shared.js";
 
+const PRESET_META = {
+  balanced: {
+    label: "Balanced",
+    note: "Use this when the silhouette is already close and you want an even starting point.",
+  },
+  hair: {
+    label: "Hair Priority",
+    note: "Bias your cleanup around flyaway strands and soft hairline gaps before committing the layer.",
+  },
+  edge: {
+    label: "Edge Priority",
+    note: "Use this when the boundary should stay tight around shoulders, jaw lines, or wardrobe edges.",
+  },
+  motion: {
+    label: "Motion Blur",
+    note: "Use this when motion softness matters more than a perfectly hard cut on the outer contour.",
+  },
+};
+
 function bindWorkbench() {
   const root = document.getElementById("annotator-app");
   if (!root) {
@@ -21,40 +40,40 @@ function bindWorkbench() {
   const targetList = document.getElementById("target-list");
   const positiveButton = document.getElementById("positive-mode");
   const negativeButton = document.getElementById("negative-mode");
+  const brushButtons = Array.from(root.querySelectorAll(".brush-button"));
+  const presetButtons = Array.from(root.querySelectorAll(".preset-button"));
   const stageButtons = Array.from(root.querySelectorAll(".stage-button"));
   const viewButtons = Array.from(root.querySelectorAll(".canvas-view-tab"));
   const inspectorStage = document.getElementById("inspector-stage");
   const inspectorTarget = document.getElementById("inspector-target");
+  const inspectorPreset = document.getElementById("inspector-preset");
   const inspectorPoints = document.getElementById("inspector-points");
   const inspectorMask = document.getElementById("inspector-mask");
   const canvasModeLabel = document.getElementById("canvas-mode-label");
   const canvasStageNote = document.getElementById("canvas-stage-note");
-  const railNote = document.getElementById("rail-note");
   const guidanceTitle = document.getElementById("stage-guidance-title");
   const guidanceCopy = document.getElementById("stage-guidance-copy");
+  const selectionNote = document.getElementById("selection-note");
+  const presetNote = document.getElementById("preset-note");
+  const brushNote = document.getElementById("brush-note");
+  const workflowStageChip = document.getElementById("workflow-stage-chip");
+  const targetNameInput = document.getElementById("target-name-input");
+  const applyTargetNameButton = document.getElementById("apply-target-name");
+  const toggleTargetLockButton = document.getElementById("toggle-target-lock");
+  const targetSummary = document.getElementById("target-summary");
+  const brushRadiusInput = document.getElementById("brush-radius");
+  const brushRadiusValue = document.getElementById("brush-radius-value");
+  const overlayOpacityInput = document.getElementById("overlay-opacity");
+  const overlayOpacityValue = document.getElementById("overlay-opacity-value");
 
   const state = {
-    positiveMode: true,
+    activeTool: "point-positive",
     canvasMode: "overlay",
     workbench: null,
     selectedMasks: new Set(),
+    brushRadius: Number(brushRadiusInput?.value || 28),
+    overlayOpacity: Number(overlayOpacityInput?.value || 72),
   };
-
-  function setMode(nextPositiveMode) {
-    state.positiveMode = nextPositiveMode;
-    positiveButton?.toggleAttribute("data-active", nextPositiveMode);
-    negativeButton?.toggleAttribute("data-active", !nextPositiveMode);
-    if (state.workbench) {
-      syncActionState(state.workbench);
-    }
-  }
-
-  function setCanvasMode(nextCanvasMode) {
-    state.canvasMode = nextCanvasMode;
-    if (state.workbench) {
-      syncCanvasMode(state.workbench);
-    }
-  }
 
   function isTypingContext(target) {
     if (!(target instanceof HTMLElement)) {
@@ -71,6 +90,25 @@ function bindWorkbench() {
 
   function selectedMaskNames() {
     return Array.from(state.selectedMasks).sort();
+  }
+
+  function activeTarget(payload = state.workbench) {
+    return payload?.targets?.find((target) => target.target_id === payload.active_target_id) || null;
+  }
+
+  function activePreset(payload = state.workbench) {
+    return activeTarget(payload)?.refine_preset || "balanced";
+  }
+
+  function applyImagePresentation() {
+    if (!image) {
+      return;
+    }
+    if (state.canvasMode === "source") {
+      image.style.opacity = "1";
+    } else {
+      image.style.opacity = String(state.overlayOpacity / 100);
+    }
   }
 
   function syncSelectedMasks(payload) {
@@ -90,6 +128,28 @@ function bindWorkbench() {
     );
     if (state.selectedMasks.size === 0 && serverSelected.size > 0) {
       state.selectedMasks = serverSelected;
+    }
+  }
+
+  function syncToolButtons(payload) {
+    const canEdit = payload?.can_apply_clicks ?? false;
+    const pointPositive = state.activeTool === "point-positive";
+    const pointNegative = state.activeTool === "point-negative";
+
+    positiveButton?.toggleAttribute("data-active", pointPositive);
+    negativeButton?.toggleAttribute("data-active", pointNegative);
+    positiveButton?.toggleAttribute("disabled", !canEdit);
+    negativeButton?.toggleAttribute("disabled", !canEdit);
+
+    brushButtons.forEach((button) => {
+      const isActive = state.activeTool === `brush-${button.dataset.brushMode}`;
+      button.toggleAttribute("data-active", isActive);
+      button.toggleAttribute("disabled", !canEdit);
+    });
+
+    if (image) {
+      image.dataset.editable = canEdit ? "true" : "false";
+      image.style.cursor = canEdit ? "crosshair" : "default";
     }
   }
 
@@ -153,7 +213,7 @@ function bindWorkbench() {
       selectButton.className = "target-card__select";
       selectButton.innerHTML = `
         <span class="target-card__name">${target.name}</span>
-        <span class="target-card__meta">${target.point_count} point${target.point_count === 1 ? "" : "s"} · ${target.saved_mask_name || "unsaved"} · ${target.visible ? "visible" : "hidden"} · ${target.locked ? "locked" : "editable"}</span>
+        <span class="target-card__meta">${target.point_count} point${target.point_count === 1 ? "" : "s"} | ${PRESET_META[target.refine_preset]?.label || "Balanced"} | ${target.saved_mask_name || "unsaved"} | ${target.visible ? "visible" : "hidden"} | ${target.locked ? "locked" : "editable"}</span>
       `;
       selectButton.addEventListener("click", async () => {
         if (target.target_id === activeTargetId) {
@@ -175,23 +235,6 @@ function bindWorkbench() {
 
       const actions = document.createElement("div");
       actions.className = "target-card__actions";
-
-      const renameButton = document.createElement("button");
-      renameButton.type = "button";
-      renameButton.className = "target-chip";
-      renameButton.textContent = "Rename";
-      renameButton.addEventListener("click", () => {
-        const nextName = window.prompt("Rename target layer", target.name);
-        if (nextName === null || nextName.trim() === "" || nextName.trim() === target.name) {
-          return;
-        }
-        updateTarget(
-          target.target_id,
-          { name: nextName.trim() },
-          `Renaming ${target.name}...`,
-          () => `Renamed target to ${nextName.trim()}.`
-        );
-      });
 
       const visibilityButton = document.createElement("button");
       visibilityButton.type = "button";
@@ -221,7 +264,7 @@ function bindWorkbench() {
         );
       });
 
-      actions.append(renameButton, visibilityButton, lockButton);
+      actions.append(visibilityButton, lockButton);
       card.append(selectButton, actions);
       targetList.appendChild(card);
     });
@@ -235,31 +278,31 @@ function bindWorkbench() {
     root.dataset.stage = payload.stage;
     root.dataset.editable = payload.can_apply_clicks ? "true" : "false";
 
-    if (image) {
-      image.dataset.editable = payload.can_apply_clicks ? "true" : "false";
-      image.style.cursor = payload.can_apply_clicks
-        ? state.positiveMode ? "crosshair" : "cell"
-        : "default";
-    }
-
-    positiveButton?.toggleAttribute("disabled", !payload.can_apply_clicks);
-    negativeButton?.toggleAttribute("disabled", !payload.can_apply_clicks);
     createTargetButton?.toggleAttribute("disabled", !payload.can_create_target);
     undoButton?.toggleAttribute("disabled", !payload.can_undo_clicks);
     resetButton?.toggleAttribute("disabled", !payload.can_reset_target);
     saveButton?.toggleAttribute("disabled", !payload.can_save_current_target);
     submitButton?.toggleAttribute("disabled", !canSubmit);
+    applyTargetNameButton?.toggleAttribute("disabled", !payload.active_target_id);
+
+    const currentTarget = activeTarget(payload);
+    toggleTargetLockButton?.toggleAttribute("disabled", !currentTarget);
+    if (toggleTargetLockButton && currentTarget) {
+      toggleTargetLockButton.textContent = currentTarget.locked ? "Unlock Target" : "Lock Target";
+    }
 
     if (submitButton) {
       submitButton.textContent = payload.stage === "preview"
         ? "Queue Matting Job"
         : "Submit Matting Job";
     }
+
+    syncToolButtons(payload);
   }
 
   function resolveCanvasUrl(payload) {
     if (state.canvasMode === "mask") {
-      return payload.active_mask_url || payload.template_frame_url || root.dataset.templateFrameUrl;
+      return payload.active_mask_url || payload.current_mask_url || payload.template_frame_url || root.dataset.templateFrameUrl;
     }
     if (state.canvasMode === "source") {
       return payload.template_frame_url || root.dataset.templateFrameUrl;
@@ -268,7 +311,7 @@ function bindWorkbench() {
   }
 
   function syncCanvasMode(payload) {
-    if (state.canvasMode === "mask" && !payload.active_mask_url) {
+    if (state.canvasMode === "mask" && !payload.active_mask_url && !payload.current_mask_url) {
       state.canvasMode = payload.current_preview_url ? "overlay" : "source";
     }
 
@@ -279,7 +322,7 @@ function bindWorkbench() {
     }[state.canvasMode];
 
     if (canvasModeLabel) {
-      canvasModeLabel.textContent = `${payload.canvas_mode_label || "Guided silhouette pass"} - ${modeLabel}`;
+      canvasModeLabel.textContent = `${payload.canvas_mode_label || "Guided silhouette pass"} | ${modeLabel}`;
     }
 
     if (image) {
@@ -293,27 +336,40 @@ function bindWorkbench() {
 
     viewButtons.forEach((button) => {
       const isMask = button.dataset.canvasMode === "mask";
-      button.toggleAttribute("disabled", isMask && !payload.active_mask_url);
+      button.toggleAttribute(
+        "disabled",
+        isMask && !payload.active_mask_url && !payload.current_mask_url
+      );
       button.toggleAttribute("data-active", button.dataset.canvasMode === state.canvasMode);
     });
+
+    applyImagePresentation();
+  }
+
+  function syncPresetButtons(payload) {
+    const preset = activePreset(payload);
+    presetButtons.forEach((button) => {
+      button.toggleAttribute("data-active", button.dataset.preset === preset);
+    });
+    if (inspectorPreset) {
+      inspectorPreset.textContent = PRESET_META[preset]?.label || "Balanced";
+    }
+    if (presetNote) {
+      presetNote.textContent = PRESET_META[preset]?.note || PRESET_META.balanced.note;
+    }
   }
 
   function renderWorkbench(payload) {
     state.workbench = payload;
     syncSelectedMasks(payload);
 
-    const currentTarget = payload.targets.find(
-      (target) => target.target_id === payload.active_target_id
-    );
+    const currentTarget = activeTarget(payload);
 
     syncCanvasMode(payload);
+    syncPresetButtons(payload);
+
     if (canvasStageNote) {
       canvasStageNote.textContent = payload.stage_note || "";
-    }
-    if (railNote) {
-      railNote.textContent = payload.stage === "preview"
-        ? "Preview locks point editing so you can review saved masks and export selection without accidental clicks."
-        : "Coarse clicks stay isolated per target layer. Save each layer before moving to the next person.";
     }
     if (guidanceTitle) {
       guidanceTitle.textContent = payload.stage_label || "Coarse Selection";
@@ -321,12 +377,26 @@ function bindWorkbench() {
     if (guidanceCopy) {
       guidanceCopy.textContent = payload.stage_note || "";
     }
+    if (workflowStageChip) {
+      workflowStageChip.textContent = payload.stage_label || payload.stage;
+    }
+    if (selectionNote) {
+      selectionNote.textContent = payload.stage === "preview"
+        ? "Preview is locked. Return to coarse or refine before placing more points."
+        : "Use points to establish the person first, then switch into presets or brush cleanup.";
+    }
+    if (brushNote) {
+      brushNote.textContent = payload.stage === "preview"
+        ? "Brush refinement is disabled in preview mode."
+        : "Brush actions edit the active mask directly, which is useful when SAM2 gets the rough silhouette but misses small edge corrections.";
+    }
+
     if (inspectorStage) {
       inspectorStage.textContent = payload.stage_label || payload.stage;
     }
     if (inspectorTarget) {
       inspectorTarget.textContent = currentTarget
-        ? `${currentTarget.name}${currentTarget.locked ? " · Locked" : ""}${currentTarget.visible ? "" : " · Hidden"}`
+        ? `${currentTarget.name}${currentTarget.locked ? " | Locked" : ""}${currentTarget.visible ? "" : " | Hidden"}`
         : "-";
     }
     if (inspectorPoints) {
@@ -334,6 +404,15 @@ function bindWorkbench() {
     }
     if (inspectorMask) {
       inspectorMask.textContent = currentTarget?.saved_mask_name || "Not saved yet";
+    }
+    if (targetNameInput && currentTarget) {
+      targetNameInput.value = currentTarget.name;
+      targetNameInput.disabled = false;
+    }
+    if (targetSummary) {
+      targetSummary.textContent = currentTarget
+        ? `${currentTarget.name} is ${currentTarget.visible ? "visible" : "hidden"}, ${currentTarget.locked ? "locked" : "editable"}, and uses the ${PRESET_META[currentTarget.refine_preset]?.label || "Balanced"} preset.`
+        : "No active target selected.";
     }
 
     stageButtons.forEach((button) => {
@@ -351,10 +430,44 @@ function bindWorkbench() {
     return payload;
   }
 
-  setMode(true);
+  function setActiveTool(nextTool) {
+    state.activeTool = nextTool;
+    syncToolButtons(state.workbench);
+  }
 
-  positiveButton?.addEventListener("click", () => setMode(true));
-  negativeButton?.addEventListener("click", () => setMode(false));
+  function setCanvasMode(nextCanvasMode) {
+    state.canvasMode = nextCanvasMode;
+    if (state.workbench) {
+      syncCanvasMode(state.workbench);
+    }
+  }
+
+  positiveButton?.addEventListener("click", () => setActiveTool("point-positive"));
+  negativeButton?.addEventListener("click", () => setActiveTool("point-negative"));
+
+  brushButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      setActiveTool(`brush-${button.dataset.brushMode}`);
+      setStatus(status, `${button.textContent} tool ready. Click the canvas to refine the mask.`, false);
+    });
+  });
+
+  brushRadiusInput?.addEventListener("input", () => {
+    state.brushRadius = Number(brushRadiusInput.value);
+    if (brushRadiusValue) {
+      brushRadiusValue.value = `${state.brushRadius} px`;
+      brushRadiusValue.textContent = `${state.brushRadius} px`;
+    }
+  });
+
+  overlayOpacityInput?.addEventListener("input", () => {
+    state.overlayOpacity = Number(overlayOpacityInput.value);
+    if (overlayOpacityValue) {
+      overlayOpacityValue.value = `${state.overlayOpacity}%`;
+      overlayOpacityValue.textContent = `${state.overlayOpacity}%`;
+    }
+    applyImagePresentation();
+  });
 
   viewButtons.forEach((button) => {
     button.addEventListener("click", () => {
@@ -384,6 +497,21 @@ function bindWorkbench() {
     });
   });
 
+  presetButtons.forEach((button) => {
+    button.addEventListener("click", async () => {
+      const currentTarget = activeTarget();
+      if (!currentTarget) {
+        return;
+      }
+      await updateTarget(
+        currentTarget.target_id,
+        { refine_preset: button.dataset.preset },
+        `Applying ${button.textContent} preset...`,
+        () => `${button.textContent} preset is now active for ${currentTarget.name}.`
+      );
+    });
+  });
+
   createTargetButton?.addEventListener("click", async () => {
     if (createTargetButton.disabled) {
       return;
@@ -402,6 +530,34 @@ function bindWorkbench() {
     } catch (error) {
       setStatus(status, error.message, true);
     }
+  });
+
+  applyTargetNameButton?.addEventListener("click", async () => {
+    const currentTarget = activeTarget();
+    const nextName = targetNameInput?.value?.trim();
+    if (!currentTarget || !nextName || nextName === currentTarget.name) {
+      return;
+    }
+    await updateTarget(
+      currentTarget.target_id,
+      { name: nextName },
+      `Renaming ${currentTarget.name}...`,
+      () => `Renamed target to ${nextName}.`
+    );
+  });
+
+  toggleTargetLockButton?.addEventListener("click", async () => {
+    const currentTarget = activeTarget();
+    if (!currentTarget) {
+      return;
+    }
+    const nextLocked = !currentTarget.locked;
+    await updateTarget(
+      currentTarget.target_id,
+      { locked: nextLocked },
+      `${nextLocked ? "Locking" : "Unlocking"} ${currentTarget.name}...`,
+      () => `${currentTarget.name} is now ${nextLocked ? "locked" : "editable"}.`
+    );
   });
 
   undoButton?.addEventListener("click", async () => {
@@ -442,7 +598,7 @@ function bindWorkbench() {
 
   image?.addEventListener("click", async (event) => {
     if (!state.workbench?.can_apply_clicks) {
-      setStatus(status, "Preview mode is read-only. Switch back to coarse or refine to place more points.", false);
+      setStatus(status, "Preview mode is read-only. Switch back to coarse or refine to edit the target.", false);
       return;
     }
 
@@ -452,19 +608,39 @@ function bindWorkbench() {
     const x = Math.round((event.clientX - bounds.left) * scaleX);
     const y = Math.round((event.clientY - bounds.top) * scaleY);
 
-    setStatus(status, "Updating target preview...", false);
     try {
-      const payload = await parseJson(
+      let payload;
+      if (state.activeTool.startsWith("brush-")) {
+        const brushMode = state.activeTool.replace("brush-", "");
+        setStatus(status, `Applying ${brushMode} brush...`, false);
+        payload = await parseJson(
+          await fetch(root.dataset.brushEndpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              mode: brushMode,
+              radius: state.brushRadius,
+              points: [[x, y]],
+            }),
+          })
+        );
+        renderWorkbench(payload);
+        setStatus(status, `${brushMode} brush updated ${activeTarget(payload)?.name || "the active target"}.`, false);
+        return;
+      }
+
+      setStatus(status, "Updating target preview...", false);
+      payload = await parseJson(
         await fetch(root.dataset.clickEndpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ x, y, positive: state.positiveMode }),
+          body: JSON.stringify({ x, y, positive: state.activeTool === "point-positive" }),
         })
       );
       renderWorkbench(payload);
       setStatus(
         status,
-        `${state.positiveMode ? "Positive" : "Negative"} point applied to ${payload.targets.find((target) => target.target_id === payload.active_target_id)?.name || "target"}.`,
+        `${state.activeTool === "point-positive" ? "Positive" : "Negative"} point applied to ${activeTarget(payload)?.name || "target"}.`,
         false
       );
     } catch (error) {
@@ -571,13 +747,28 @@ function bindWorkbench() {
     switch (lowerKey) {
       case "p":
         event.preventDefault();
-        setMode(true);
+        setActiveTool("point-positive");
         setStatus(status, "Shortcut: Positive point tool.", false);
         return;
       case "n":
         event.preventDefault();
-        setMode(false);
+        setActiveTool("point-negative");
         setStatus(status, "Shortcut: Negative point tool.", false);
+        return;
+      case "b":
+        event.preventDefault();
+        setActiveTool("brush-add");
+        setStatus(status, "Shortcut: Add brush tool.", false);
+        return;
+      case "e":
+        event.preventDefault();
+        setActiveTool("brush-remove");
+        setStatus(status, "Shortcut: Remove brush tool.", false);
+        return;
+      case "g":
+        event.preventDefault();
+        setActiveTool("brush-feather");
+        setStatus(status, "Shortcut: Feather brush tool.", false);
         return;
       case "t":
         event.preventDefault();

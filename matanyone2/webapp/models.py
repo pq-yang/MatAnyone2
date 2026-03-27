@@ -53,6 +53,7 @@ class AnnotationTarget:
     saved_mask_name: str | None = None
     visible: bool = True
     locked: bool = False
+    refine_preset: str = "balanced"
 
 
 @dataclass(slots=True)

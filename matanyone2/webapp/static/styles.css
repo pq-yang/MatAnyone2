@@ -400,7 +400,7 @@ button {
 
 .workbench-shell {
   display: grid;
-  grid-template-columns: minmax(14rem, 16rem) minmax(0, 1fr) minmax(19rem, 22rem);
+  grid-template-columns: minmax(21rem, 24rem) minmax(0, 1fr) minmax(18rem, 20rem);
   gap: var(--space-6);
   align-items: start;
 }
@@ -412,11 +412,19 @@ button {
   gap: var(--space-5);
 }
 
+.workbench-workflow {
+  min-height: auto;
+  position: sticky;
+  top: var(--space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
 .workbench-sidebar {
   min-width: 0;
 }
 
-.workbench-rail,
 .sidebar-panel,
 .workbench-header,
 .stage-switcher,
@@ -424,9 +432,84 @@ button {
   min-height: auto;
 }
 
+.workflow-header {
+  margin-bottom: 0;
+}
+
+.workflow-section {
+  display: grid;
+  gap: var(--space-4);
+  padding-top: var(--space-5);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.workflow-section:first-of-type {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.workflow-section__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.workflow-section__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.workflow-inline-button {
+  min-height: 2.4rem;
+}
+
+.workflow-inline-actions,
+.tool-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.preset-grid,
+.slider-stack,
 .tool-stack {
   display: grid;
   gap: var(--space-3);
+}
+
+.workflow-field {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.workflow-field__label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.workflow-input,
+.slider-stack input[type="range"] {
+  width: 100%;
+}
+
+.workflow-input {
+  min-height: 2.85rem;
+  padding: 0 0.9rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+}
+
+.tool-button--compact {
+  min-height: 2.6rem;
+  padding: 0.75rem 0.9rem;
 }
 
 .tool-button,
@@ -459,6 +542,7 @@ button {
 
 .tool-button[data-active],
 .stage-button[data-active],
+.preset-button[data-active],
 .target-card[data-selected="true"] .target-card__select {
   border-color: rgba(118, 199, 255, 0.48);
   background: rgba(34, 75, 108, 0.28);
@@ -466,61 +550,6 @@ button {
 
 .tool-button--ghost {
   background: rgba(255, 255, 255, 0.02);
-}
-
-.rail-note {
-  margin-top: var(--space-6);
-  color: var(--text-muted);
-  line-height: 1.7;
-}
-
-.shortcut-panel {
-  margin-top: var(--space-6);
-  padding-top: var(--space-5);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.shortcut-list {
-  display: grid;
-  gap: var(--space-4);
-}
-
-.shortcut-item {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.shortcut-item__label {
-  color: var(--text-soft);
-  font-size: 0.82rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.shortcut-chips {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.45rem;
-  color: var(--text-muted);
-  font-size: 0.9rem;
-}
-
-.shortcut-panel kbd {
-  min-width: 2rem;
-  min-height: 1.8rem;
-  padding: 0 0.5rem;
-  border-radius: 0.6rem;
-  border: 1px solid rgba(118, 199, 255, 0.22);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  line-height: 1;
-  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .workbench-header {
@@ -671,6 +700,20 @@ button {
   margin-top: var(--space-6);
 }
 
+.saved-mask-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.saved-mask-list label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+}
+
 .guidance-card {
   margin-top: var(--space-6);
   padding-top: var(--space-5);
@@ -681,16 +724,6 @@ button {
   margin: 0 0 var(--space-3);
   font-size: 1rem;
   font-weight: 600;
-}
-
-#saved-mask-list label {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 0.65rem 0.75rem;
-  margin-bottom: var(--space-2);
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.03);
 }
 
 #annotator-app,
@@ -705,12 +738,6 @@ button {
   margin-top: var(--space-4);
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
-}
-
-#saved-mask-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
 }
 
 .results-shell {

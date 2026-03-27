@@ -73,6 +73,13 @@ def test_annotation_page_exposes_workbench_contract(
     assert response.status_code == 200
     assert f'data-workbench-endpoint="/api/drafts/{draft_id}"' in response.text
     assert f'data-targets-endpoint="/api/drafts/{draft_id}/targets"' in response.text
+    assert f'data-brush-endpoint="/api/drafts/{draft_id}/brush"' in response.text
+    assert 'id="workflow-panel"' in response.text
+    assert 'id="selection-controls"' in response.text
+    assert 'id="preset-controls"' in response.text
+    assert 'id="brush-controls"' in response.text
+    assert 'id="detail-controls"' in response.text
+    assert 'id="export-selection-panel"' in response.text
 
 
 def test_target_creation_and_selection_round_trip(
@@ -128,7 +135,12 @@ def test_target_update_round_trip(
 
     update_response = app_client.patch(
         f"/api/drafts/{draft_id}/targets/{target_id}",
-        json={"name": "Lead Actor", "visible": False, "locked": True},
+        json={
+            "name": "Lead Actor",
+            "visible": False,
+            "locked": True,
+            "refine_preset": "hair",
+        },
     )
 
     assert update_response.status_code == 200
@@ -140,6 +152,7 @@ def test_target_update_round_trip(
         and target["name"] == "Lead Actor"
         and target["visible"] is False
         and target["locked"] is True
+        and target["refine_preset"] == "hair"
         for target in payload["targets"]
     )
 
@@ -173,6 +186,57 @@ def test_stage_change_round_trip(
     assert preview_response.json()["stage_label"] == "Preview"
     assert preview_response.json()["can_apply_clicks"] is False
     assert preview_response.json()["can_create_target"] is False
+
+
+def test_preview_stage_locks_save_and_brush_actions(
+    app_client: TestClient,
+    sample_video_upload,
+):
+    upload_response = app_client.post(
+        "/api/uploads",
+        files={"video": sample_video_upload},
+    )
+    draft_id = upload_response.json()["draft_id"]
+
+    app_client.post(
+        f"/api/drafts/{draft_id}/click",
+        json={"x": 1, "y": 1, "positive": True},
+    )
+    preview_response = app_client.post(
+        f"/api/drafts/{draft_id}/stage",
+        json={"stage": "preview"},
+    )
+    brush_response = app_client.post(
+        f"/api/drafts/{draft_id}/brush",
+        json={"mode": "add", "radius": 20, "points": [[2, 2]]},
+    )
+
+    assert preview_response.status_code == 200
+    assert preview_response.json()["can_save_current_target"] is False
+    assert brush_response.status_code == 400
+    assert brush_response.json()["detail"] == "preview mode is read-only"
+
+
+def test_brush_round_trip_updates_current_mask_preview(
+    app_client: TestClient,
+    sample_video_upload,
+):
+    upload_response = app_client.post(
+        "/api/uploads",
+        files={"video": sample_video_upload},
+    )
+    draft_id = upload_response.json()["draft_id"]
+
+    response = app_client.post(
+        f"/api/drafts/{draft_id}/brush",
+        json={"mode": "add", "radius": 20, "points": [[2, 2], [3, 3]]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["current_mask_url"] is not None
+    assert payload["current_preview_url"] is not None
+    assert payload["can_save_current_target"] is True
 
 
 def test_saved_mask_is_selected_for_export_and_unlocks_submit(

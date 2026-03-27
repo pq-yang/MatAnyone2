@@ -25,11 +25,13 @@ def test_annotation_page_renders_workbench_layout(
 
     assert response.status_code == 200
     assert 'class="workbench-shell"' in response.text
-    assert 'id="tool-rail"' in response.text
-    assert 'id="shortcut-panel"' in response.text
-    assert 'data-shortcut="P"' in response.text
-    assert 'data-shortcut="1"' in response.text
-    assert 'data-shortcut="Ctrl+S"' in response.text
+    assert 'id="workflow-panel"' in response.text
+    assert 'id="target-controls"' in response.text
+    assert 'id="selection-controls"' in response.text
+    assert 'id="preset-controls"' in response.text
+    assert 'id="brush-controls"' in response.text
+    assert 'id="detail-controls"' in response.text
+    assert 'id="export-selection-panel"' in response.text
     assert 'id="canvas-stage"' in response.text
     assert 'id="layer-panel"' in response.text
     assert 'id="inspector-panel"' in response.text
@@ -39,6 +41,8 @@ def test_annotation_page_renders_workbench_layout(
     assert 'data-canvas-mode="mask"' in response.text
     assert 'id="undo-click"' in response.text
     assert 'id="reset-target"' in response.text
+    assert 'id="brush-radius"' in response.text
+    assert 'id="overlay-opacity"' in response.text
     assert 'id="canvas-stage-note"' in response.text
     assert 'id="stage-guidance-title"' in response.text
     assert 'id="stage-guidance-copy"' in response.text

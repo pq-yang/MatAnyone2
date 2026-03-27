@@ -30,10 +30,17 @@ class DraftTargetUpdatePayload(BaseModel):
     name: str | None = None
     visible: bool | None = None
     locked: bool | None = None
+    refine_preset: str | None = None
 
 
 class DraftStagePayload(BaseModel):
     stage: str
+
+
+class DraftBrushPayload(BaseModel):
+    mode: str
+    radius: int
+    points: list[tuple[int, int]]
 
 
 router = APIRouter()
@@ -80,17 +87,18 @@ def _target_payload(target, session):
         "point_count": len(target.click_points),
         "visible": target.visible,
         "locked": target.locked,
+        "refine_preset": target.refine_preset,
         "saved_mask_name": target.saved_mask_name,
         "selected": target.target_id == session.active_target_id,
     }
 
 
 def _active_mask_url(session, draft_id: str):
-    if session.current_mask_path is not None:
-        return f"/api/drafts/{draft_id}/current-mask"
     saved_mask_name = session.active_target.saved_mask_name
     if saved_mask_name and saved_mask_name in session.saved_masks:
         return f"/api/drafts/{draft_id}/masks/{saved_mask_name}"
+    if session.current_mask_path is not None:
+        return f"/api/drafts/{draft_id}/current-mask"
     return None
 
 
@@ -106,7 +114,11 @@ def _workbench_payload(session, draft_id: str):
         "stage_note": stage_meta["stage_note"],
         "can_apply_clicks": session.stage != "preview" and not target_locked,
         "can_create_target": session.stage != "preview",
-        "can_save_current_target": session.current_mask_path is not None and not target_locked,
+        "can_save_current_target": (
+            session.stage != "preview"
+            and session.current_mask_path is not None
+            and not target_locked
+        ),
         "can_undo_clicks": (
             session.stage != "preview" and not target_locked and len(session.click_points) > 0
         ),
@@ -187,6 +199,7 @@ def update_target(
             name=payload.name,
             visible=payload.visible,
             locked=payload.locked,
+            refine_preset=payload.refine_preset,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"target not found: {target_id}") from exc
@@ -231,6 +244,35 @@ def apply_click(
         "current_preview_path": str(result.current_preview_path),
         "current_mask_url": f"/api/drafts/{draft_id}/current-mask",
         "current_preview_url": f"/api/drafts/{draft_id}/current-preview",
+        }
+    )
+    return response
+
+
+@router.post("/api/drafts/{draft_id}/brush")
+def apply_brush(
+    draft_id: str,
+    payload: DraftBrushPayload,
+    draft_store=Depends(get_draft_store),
+    masking_service=Depends(get_masking_service),
+):
+    session = _require_session(draft_store, draft_id)
+    try:
+        result = masking_service.apply_brush(
+            session,
+            points=payload.points,
+            mode=payload.mode,
+            radius=payload.radius,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    response = _workbench_payload(session, draft_id)
+    response.update(
+        {
+            "current_mask_path": str(result.current_mask_path),
+            "current_preview_path": str(result.current_preview_path),
+            "current_mask_url": f"/api/drafts/{draft_id}/current-mask",
+            "current_preview_url": f"/api/drafts/{draft_id}/current-preview",
         }
     )
     return response

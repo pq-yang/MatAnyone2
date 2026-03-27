@@ -11,87 +11,165 @@
   data-targets-endpoint="/api/drafts/{{ draft_id }}/targets"
   data-stage-endpoint="/api/drafts/{{ draft_id }}/stage"
   data-click-endpoint="/api/drafts/{{ draft_id }}/click"
+  data-brush-endpoint="/api/drafts/{{ draft_id }}/brush"
   data-save-endpoint="/api/drafts/{{ draft_id }}/masks"
   data-submit-endpoint="/api/drafts/{{ draft_id }}/submit"
   data-job-page-prefix="/jobs/"
 >
-  <aside id="tool-rail" class="panel workbench-rail">
-    <div class="panel__header">
-      <p class="panel__eyebrow">Selection Tools</p>
-      <h1 class="panel__title">Target isolation</h1>
+  <aside id="workflow-panel" class="panel workbench-workflow">
+    <div class="panel__header workflow-header">
+      <div>
+        <p class="panel__eyebrow">Annotation Workbench</p>
+        <h1 class="panel__title">Single-page target prep</h1>
+      </div>
+      <span id="workflow-stage-chip" class="status-chip status-chip--muted">Coarse Selection</span>
     </div>
 
-    <div class="tool-stack">
-      <button id="positive-mode" class="tool-button" type="button" data-positive="true">
-        Positive Point
-      </button>
-      <button id="negative-mode" class="tool-button" type="button" data-positive="false">
-        Negative Point
-      </button>
-      <button id="create-target" class="tool-button tool-button--ghost" type="button">
-        New Target Layer
-      </button>
-      <button id="undo-click" class="tool-button tool-button--ghost" type="button">
-        Undo Point
-      </button>
-      <button id="reset-target" class="tool-button tool-button--ghost" type="button">
-        Reset Current Target
-      </button>
-    </div>
+    <section id="target-controls" class="workflow-section">
+      <div class="workflow-section__header">
+        <div>
+          <p class="panel__eyebrow">Target</p>
+          <h2 class="workflow-section__title">Current person</h2>
+        </div>
+        <button id="create-target" class="button button--ghost workflow-inline-button" type="button">
+          New Target
+        </button>
+      </div>
+      <label class="workflow-field">
+        <span class="workflow-field__label">Target name</span>
+        <input id="target-name-input" class="workflow-input" type="text" placeholder="Target 1">
+      </label>
+      <div class="workflow-inline-actions">
+        <button id="apply-target-name" class="tool-button tool-button--compact" type="button">
+          Apply Name
+        </button>
+        <button id="toggle-target-lock" class="tool-button tool-button--compact" type="button">
+          Lock Target
+        </button>
+      </div>
+      <p id="target-summary" class="panel-note">
+        Pick one person, save that layer, then move to the next target.
+      </p>
+    </section>
 
-    <div id="rail-note" class="rail-note">
-      Coarse clicks stay isolated per target layer. Save each layer before moving to the next person.
-    </div>
-
-    <section id="shortcut-panel" class="shortcut-panel" aria-label="Keyboard shortcuts">
-      <p class="panel__eyebrow">Keyboard Shortcuts</p>
-      <div class="shortcut-list">
-        <div class="shortcut-item">
-          <span class="shortcut-item__label">Point modes</span>
-          <div class="shortcut-chips">
-            <kbd data-shortcut="P">P</kbd>
-            <span>Positive</span>
-            <kbd data-shortcut="N">N</kbd>
-            <span>Negative</span>
-          </div>
-        </div>
-        <div class="shortcut-item">
-          <span class="shortcut-item__label">Target stack</span>
-          <div class="shortcut-chips">
-            <kbd data-shortcut="T">T</kbd>
-            <span>New target</span>
-            <kbd data-shortcut="U">U</kbd>
-            <span>Undo</span>
-          </div>
-        </div>
-        <div class="shortcut-item">
-          <span class="shortcut-item__label">Stages</span>
-          <div class="shortcut-chips">
-            <kbd data-shortcut="1">1</kbd>
-            <kbd data-shortcut="2">2</kbd>
-            <kbd data-shortcut="3">3</kbd>
-            <span>Coarse / Refine / Preview</span>
-          </div>
-        </div>
-        <div class="shortcut-item">
-          <span class="shortcut-item__label">Views</span>
-          <div class="shortcut-chips">
-            <kbd data-shortcut="F">F</kbd>
-            <span>Source</span>
-            <kbd data-shortcut="O">O</kbd>
-            <span>Overlay</span>
-            <kbd data-shortcut="M">M</kbd>
-            <span>Mask</span>
-          </div>
-        </div>
-        <div class="shortcut-item">
-          <span class="shortcut-item__label">Commit</span>
-          <div class="shortcut-chips">
-            <kbd data-shortcut="Ctrl+S">Ctrl+S</kbd>
-            <span>Save target</span>
-          </div>
+    <section id="selection-controls" class="workflow-section">
+      <div class="workflow-section__header">
+        <div>
+          <p class="panel__eyebrow">Selection</p>
+          <h2 class="workflow-section__title">Coarse subject isolation</h2>
         </div>
       </div>
+      <div class="tool-grid">
+        <button id="positive-mode" class="tool-button" type="button" data-positive="true">
+          Positive Point
+        </button>
+        <button id="negative-mode" class="tool-button" type="button" data-positive="false">
+          Negative Point
+        </button>
+        <button id="undo-click" class="tool-button tool-button--ghost" type="button">
+          Undo Point
+        </button>
+        <button id="reset-target" class="tool-button tool-button--ghost" type="button">
+          Reset Target
+        </button>
+      </div>
+      <p id="selection-note" class="panel-note">
+        Start with a few positive and negative points before switching into refinement.
+      </p>
+    </section>
+
+    <section id="preset-controls" class="workflow-section">
+      <div class="workflow-section__header">
+        <div>
+          <p class="panel__eyebrow">Refine Presets</p>
+          <h2 class="workflow-section__title">Detail intent</h2>
+        </div>
+      </div>
+      <div class="preset-grid">
+        <button class="tool-button preset-button" type="button" data-preset="balanced">
+          Balanced
+        </button>
+        <button class="tool-button preset-button" type="button" data-preset="hair">
+          Hair Priority
+        </button>
+        <button class="tool-button preset-button" type="button" data-preset="edge">
+          Edge Priority
+        </button>
+        <button class="tool-button preset-button" type="button" data-preset="motion">
+          Motion Blur
+        </button>
+      </div>
+      <p id="preset-note" class="panel-note">
+        Presets help you decide whether to preserve wispy hair, tighten hard edges, or protect motion blur.
+      </p>
+    </section>
+
+    <section id="brush-controls" class="workflow-section">
+      <div class="workflow-section__header">
+        <div>
+          <p class="panel__eyebrow">Brush</p>
+          <h2 class="workflow-section__title">Manual edge cleanup</h2>
+        </div>
+      </div>
+      <div class="tool-grid">
+        <button id="brush-add" class="tool-button brush-button" type="button" data-brush-mode="add">
+          Add Area
+        </button>
+        <button id="brush-remove" class="tool-button brush-button" type="button" data-brush-mode="remove">
+          Remove Area
+        </button>
+        <button id="brush-feather" class="tool-button brush-button" type="button" data-brush-mode="feather">
+          Feather Edge
+        </button>
+      </div>
+      <p id="brush-note" class="panel-note">
+        Brush actions operate on the current editable mask so you can fix hairlines and shoulders without re-clicking everything.
+      </p>
+    </section>
+
+    <section id="detail-controls" class="workflow-section">
+      <div class="workflow-section__header">
+        <div>
+          <p class="panel__eyebrow">Detail Controls</p>
+          <h2 class="workflow-section__title">Working sensitivity</h2>
+        </div>
+      </div>
+      <div class="slider-stack">
+        <label class="workflow-field" for="brush-radius">
+          <span class="workflow-field__label">
+            Brush size
+            <output id="brush-radius-value" for="brush-radius">28 px</output>
+          </span>
+          <input id="brush-radius" type="range" min="6" max="80" value="28">
+        </label>
+        <label class="workflow-field" for="overlay-opacity">
+          <span class="workflow-field__label">
+            Overlay opacity
+            <output id="overlay-opacity-value" for="overlay-opacity">72%</output>
+          </span>
+          <input id="overlay-opacity" type="range" min="25" max="100" value="72">
+        </label>
+      </div>
+    </section>
+
+    <section id="export-selection-panel" class="workflow-section">
+      <div class="workflow-section__header">
+        <div>
+          <p class="panel__eyebrow">Export Selection</p>
+          <h2 class="workflow-section__title">Targets to include</h2>
+        </div>
+      </div>
+      <div id="saved-mask-list" class="saved-mask-list">
+        {% for mask_name in saved_masks %}
+        <label>
+          <input type="checkbox" name="mask_name" value="{{ mask_name }}" checked>
+          {{ mask_name }}
+        </label>
+        {% endfor %}
+      </div>
+      <p class="panel-note">
+        Only checked saved masks will be merged and sent into MatAnyone2.
+      </p>
     </section>
   </aside>
 
@@ -150,22 +228,10 @@
   <aside class="workbench-sidebar">
     <section id="layer-panel" class="panel sidebar-panel">
       <div class="panel__header">
-        <p class="panel__eyebrow">Target Layers</p>
-        <h2 class="panel__title">Current stack</h2>
+        <p class="panel__eyebrow">Layer Stack</p>
+        <h2 class="panel__title">Targets overview</h2>
       </div>
       <div id="target-list" class="target-list"></div>
-
-      <div class="saved-mask-group">
-        <p class="panel__eyebrow">Saved Masks For Export</p>
-        <div id="saved-mask-list">
-          {% for mask_name in saved_masks %}
-          <label>
-            <input type="checkbox" name="mask_name" value="{{ mask_name }}" checked>
-            {{ mask_name }}
-          </label>
-          {% endfor %}
-        </div>
-      </div>
     </section>
 
     <section id="inspector-panel" class="panel sidebar-panel">
@@ -181,6 +247,10 @@
         <div>
           <dt>Active Target</dt>
           <dd id="inspector-target">Target 1</dd>
+        </div>
+        <div>
+          <dt>Preset</dt>
+          <dd id="inspector-preset">Balanced</dd>
         </div>
         <div>
           <dt>Current Points</dt>

@@ -1,7 +1,7 @@
 import numpy as np
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 from matanyone2.webapp.models import AnnotationTarget, DraftRecord, DraftSession, MaskingResult
 from matanyone2.webapp.runtime_paths import ensure_dir
@@ -100,6 +100,8 @@ class Sam2MaskController:
 
 class MaskingService:
     VALID_STAGES = {"coarse", "refine", "preview"}
+    VALID_REFINE_PRESETS = {"balanced", "hair", "edge", "motion"}
+    VALID_BRUSH_MODES = {"add", "remove", "feather"}
 
     def __init__(
         self,
@@ -129,9 +131,9 @@ class MaskingService:
         return session.create_target(name=name)
 
     def select_target(self, session: DraftSession, target_id: str) -> AnnotationTarget:
-        session.current_mask_path = None
-        session.current_preview_path = None
-        return session.select_target(target_id)
+        target = session.select_target(target_id)
+        self._hydrate_target_render(session)
+        return target
 
     def update_target(
         self,
@@ -141,6 +143,7 @@ class MaskingService:
         name: str | None = None,
         visible: bool | None = None,
         locked: bool | None = None,
+        refine_preset: str | None = None,
     ) -> AnnotationTarget:
         target = session.targets.get(target_id)
         if target is None:
@@ -154,6 +157,10 @@ class MaskingService:
             target.visible = visible
         if locked is not None:
             target.locked = locked
+        if refine_preset is not None:
+            if refine_preset not in self.VALID_REFINE_PRESETS:
+                raise ValueError(f"unknown refine preset: {refine_preset}")
+            target.refine_preset = refine_preset
         return target
 
     def set_stage(self, session: DraftSession, stage: str) -> str:
@@ -173,6 +180,45 @@ class MaskingService:
         session.click_points = session.click_points + [(x, y)]
         session.click_labels = session.click_labels + [1 if positive else 0]
         return self._render_active_target(session)
+
+    def apply_brush(
+        self,
+        session: DraftSession,
+        *,
+        points: list[tuple[int, int]],
+        mode: str,
+        radius: int,
+    ) -> MaskingResult:
+        if session.stage == "preview":
+            raise ValueError("preview mode is read-only")
+        if session.active_target.locked:
+            raise ValueError("active target is locked")
+        if mode not in self.VALID_BRUSH_MODES:
+            raise ValueError(f"unknown brush mode: {mode}")
+        if radius < 1:
+            raise ValueError("brush radius must be at least 1")
+        if not points:
+            raise ValueError("at least one brush point is required")
+
+        mask = self._load_editable_mask(session)
+        mask_image = Image.fromarray(mask, mode="L")
+        stroke_mask = Image.new("L", mask_image.size, 0)
+        stroke_draw = ImageDraw.Draw(stroke_mask)
+
+        for x, y in points:
+            bounds = (x - radius, y - radius, x + radius, y + radius)
+            stroke_draw.ellipse(bounds, fill=255)
+
+        if mode == "add":
+            ImageDraw.Draw(mask_image).bitmap((0, 0), stroke_mask, fill=255)
+        elif mode == "remove":
+            ImageDraw.Draw(mask_image).bitmap((0, 0), stroke_mask, fill=0)
+        else:
+            blurred = mask_image.filter(ImageFilter.GaussianBlur(radius=max(1, radius // 4)))
+            mask_image = Image.composite(blurred, mask_image, stroke_mask)
+
+        result_mask = np.where(np.array(mask_image, dtype=np.uint8) > 127, 255, 0).astype(np.uint8)
+        return self._write_current_render(session, result_mask)
 
     def undo_last_click(self, session: DraftSession) -> MaskingResult | None:
         if not session.click_points:
@@ -203,20 +249,12 @@ class MaskingService:
             multimask=True,
         )
 
-        current_mask_path = session.session_dir / "current_mask.png"
-        current_preview_path = session.session_dir / "current_preview.png"
-        Image.fromarray(np.where(mask > 0, 255, 0).astype(np.uint8), mode="L").save(
-            current_mask_path
-        )
-        painted_image.save(current_preview_path)
-
         session.click_points = [(int(px), int(py)) for px, py in points.tolist()]
         session.click_labels = [int(label) for label in labels.tolist()]
-        session.current_mask_path = current_mask_path
-        session.current_preview_path = current_preview_path
-        return MaskingResult(
-            current_mask_path=current_mask_path,
-            current_preview_path=current_preview_path,
+        return self._write_current_render(
+            session,
+            np.where(mask > 0, 255, 0).astype(np.uint8),
+            painted_image=painted_image,
         )
 
     def _clear_current_render(self, session: DraftSession) -> None:
@@ -234,8 +272,7 @@ class MaskingService:
         session.active_target.saved_mask_name = mask_name
         session.click_points = []
         session.click_labels = []
-        session.current_mask_path = None
-        session.current_preview_path = None
+        self._hydrate_target_render(session)
         return mask_name
 
     def write_merged_mask(self, session: DraftSession, selected_masks: list[str]) -> Path:
@@ -257,6 +294,61 @@ class MaskingService:
             factory = self.controller_factory or self._build_default_controller
             self._controller = factory()
         return self._controller
+
+    def _load_editable_mask(self, session: DraftSession) -> np.ndarray:
+        if session.current_mask_path is not None and session.current_mask_path.exists():
+            return np.array(Image.open(session.current_mask_path).convert("L"), dtype=np.uint8)
+
+        saved_mask_name = session.active_target.saved_mask_name
+        if saved_mask_name:
+            saved_mask_path = session.saved_masks.get(saved_mask_name)
+            if saved_mask_path is not None and saved_mask_path.exists():
+                return np.array(Image.open(saved_mask_path).convert("L"), dtype=np.uint8)
+
+        height = session.draft.height
+        width = session.draft.width
+        return np.zeros((height, width), dtype=np.uint8)
+
+    def _write_current_render(
+        self,
+        session: DraftSession,
+        mask: np.ndarray,
+        *,
+        painted_image: Image.Image | None = None,
+    ) -> MaskingResult:
+        current_mask_path = session.session_dir / "current_mask.png"
+        current_preview_path = session.session_dir / "current_preview.png"
+        Image.fromarray(np.where(mask > 0, 255, 0).astype(np.uint8), mode="L").save(
+            current_mask_path
+        )
+
+        if painted_image is None:
+            image = np.array(Image.open(session.draft.template_frame_path).convert("RGB"))
+            points = np.array(session.click_points, dtype=np.int32)
+            labels = np.array(session.click_labels, dtype=np.int32)
+            painted_image = _render_mask_preview(image, mask, points, labels)
+
+        painted_image.save(current_preview_path)
+        session.current_mask_path = current_mask_path
+        session.current_preview_path = current_preview_path
+        return MaskingResult(
+            current_mask_path=current_mask_path,
+            current_preview_path=current_preview_path,
+        )
+
+    def _hydrate_target_render(self, session: DraftSession) -> None:
+        if session.click_points:
+            self._render_active_target(session)
+            return
+
+        saved_mask_name = session.active_target.saved_mask_name
+        if saved_mask_name:
+            saved_mask_path = session.saved_masks.get(saved_mask_name)
+            if saved_mask_path is not None and saved_mask_path.exists():
+                saved_mask = np.array(Image.open(saved_mask_path).convert("L"), dtype=np.uint8)
+                self._write_current_render(session, saved_mask)
+                return
+        self._clear_current_render(session)
 
     def _build_default_controller(self):
         if self.sam_backend == "sam2":
