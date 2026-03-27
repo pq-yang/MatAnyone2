@@ -12,6 +12,28 @@ def upload_page(request: Request):
     return templates.TemplateResponse(request, "upload.html")
 
 
+def _workspace_context(draft_id: str, session):
+    return {
+        "draft_id": draft_id,
+        "draft": session.draft,
+        "saved_masks": sorted(session.saved_masks),
+        "latest_job_id": session.latest_job_id,
+    }
+
+
+@router.get("/drafts/{draft_id}/workspace")
+def workspace_page(request: Request, draft_id: str, draft_store=Depends(get_draft_store)):
+    session = draft_store.get(draft_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="draft not found")
+    templates = request.app.state.templates
+    return templates.TemplateResponse(
+        request,
+        "workspace.html",
+        _workspace_context(draft_id, session),
+    )
+
+
 @router.get("/drafts/{draft_id}/annotate")
 def annotate_page(request: Request, draft_id: str, draft_store=Depends(get_draft_store)):
     session = draft_store.get(draft_id)
@@ -20,13 +42,8 @@ def annotate_page(request: Request, draft_id: str, draft_store=Depends(get_draft
     templates = request.app.state.templates
     return templates.TemplateResponse(
         request,
-        "annotate.html",
-        {
-            "draft_id": draft_id,
-            "draft": session.draft,
-            "template_frame_url": f"/api/drafts/{draft_id}/template-frame",
-            "saved_masks": sorted(session.saved_masks),
-        },
+        "workspace.html",
+        _workspace_context(draft_id, session),
     )
 
 

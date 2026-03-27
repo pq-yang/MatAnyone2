@@ -13,7 +13,7 @@ def test_upload_page_exposes_browser_entrypoint(app_client: TestClient):
     assert "/static/upload.js" in response.text
 
 
-def test_submit_flow_returns_job_page(
+def test_submit_flow_keeps_workspace_in_review_state(
     app_client: TestClient,
     sample_video_upload,
 ):
@@ -26,12 +26,12 @@ def test_submit_flow_returns_job_page(
     template_frame_url = upload_response.json()["template_frame_url"]
 
     template_response = app_client.get(template_frame_url)
-    annotate_page = app_client.get(f"/drafts/{draft_id}/annotate")
+    workspace_page = app_client.get(f"/drafts/{draft_id}/workspace")
 
     assert template_response.status_code == 200
     assert template_response.headers["content-type"] == "image/png"
-    assert annotate_page.status_code == 200
-    assert draft_id in annotate_page.text
+    assert workspace_page.status_code == 200
+    assert draft_id in workspace_page.text
 
     click_response = app_client.post(
         f"/api/drafts/{draft_id}/click",
@@ -43,9 +43,9 @@ def test_submit_flow_returns_job_page(
 
     assert preview_response.status_code == 200
     assert preview_response.headers["content-type"] == "image/png"
-    assert 'id="annotator-app"' in annotate_page.text
-    assert f'data-click-endpoint="/api/drafts/{draft_id}/click"' in annotate_page.text
-    assert "/static/workbench.js" in annotate_page.text
+    assert 'id="workspace-app"' in workspace_page.text
+    assert f'data-click-endpoint="/api/drafts/{draft_id}/click"' in workspace_page.text
+    assert "/static/workspace.js" in workspace_page.text
 
     save_response = app_client.post(f"/api/drafts/{draft_id}/masks")
     assert save_response.status_code == 200
@@ -63,6 +63,11 @@ def test_submit_flow_returns_job_page(
 
     assert annotate_response.status_code == 200
     assert annotate_response.json()["status"] == "queued"
+    assert annotate_response.json()["workflow_step"] == "review"
+    state_response = app_client.get(f"/api/drafts/{draft_id}")
+    assert state_response.status_code == 200
+    assert state_response.json()["workflow_step"] == "review"
+    assert state_response.json()["latest_job_id"] == annotate_response.json()["job_id"]
 
 
 def test_submit_persists_selected_mask_presets_in_job_params(
@@ -112,18 +117,16 @@ def test_annotation_page_exposes_workbench_contract(
     )
     draft_id = upload_response.json()["draft_id"]
 
-    response = app_client.get(f"/drafts/{draft_id}/annotate")
+    response = app_client.get(f"/drafts/{draft_id}/workspace")
 
     assert response.status_code == 200
     assert f'data-workbench-endpoint="/api/drafts/{draft_id}"' in response.text
+    assert f'data-workflow-step-endpoint="/api/drafts/{draft_id}/workflow-step"' in response.text
     assert f'data-targets-endpoint="/api/drafts/{draft_id}/targets"' in response.text
     assert f'data-brush-endpoint="/api/drafts/{draft_id}/brush"' in response.text
-    assert 'id="workflow-panel"' in response.text
-    assert 'id="selection-controls"' in response.text
-    assert 'id="preset-controls"' in response.text
-    assert 'id="brush-controls"' in response.text
-    assert 'id="detail-controls"' in response.text
-    assert 'id="export-selection-panel"' in response.text
+    assert 'id="workflow-stepper"' in response.text
+    assert 'id="workspace-sidebar-tabs"' in response.text
+    assert 'id="workspace-timeline-dock"' in response.text
 
 
 def test_target_creation_and_selection_round_trip(
@@ -274,10 +277,47 @@ def test_workbench_exposes_source_video_scrubber_contract(
     assert payload["duration_seconds"] == 1.0
     assert payload["process_start_frame_index"] == 0
     assert payload["process_end_frame_index"] == 2
+    assert payload["workflow_step"] == "clip"
+    assert payload["available_steps"] == ["clip", "mask", "refine", "review"]
+    assert payload["can_go_back"] is False
+    assert payload["can_go_next"] is True
+    assert payload["active_sidebar_tab"] == "targets"
+    assert payload["compare_enabled"] is False
+    assert payload["latest_job_id"] is None
     assert payload["can_apply_range"] is True
     assert payload["can_apply_template_frame"] is True
     assert video_response.status_code == 200
     assert video_response.headers["content-type"].startswith("video/")
+
+
+def test_workflow_step_navigation_round_trip(
+    app_client: TestClient,
+    sample_video_upload,
+):
+    upload_response = app_client.post(
+        "/api/uploads",
+        files={"video": sample_video_upload},
+    )
+    draft_id = upload_response.json()["draft_id"]
+
+    refine_response = app_client.post(
+        f"/api/drafts/{draft_id}/workflow-step",
+        json={"workflow_step": "refine"},
+    )
+    clip_response = app_client.post(
+        f"/api/drafts/{draft_id}/workflow-step",
+        json={"workflow_step": "clip"},
+    )
+
+    assert refine_response.status_code == 200
+    assert refine_response.json()["workflow_step"] == "refine"
+    assert refine_response.json()["can_go_back"] is True
+    assert refine_response.json()["can_go_next"] is True
+    assert refine_response.json()["active_sidebar_tab"] == "refine"
+    assert clip_response.status_code == 200
+    assert clip_response.json()["workflow_step"] == "clip"
+    assert clip_response.json()["can_go_back"] is False
+    assert clip_response.json()["active_sidebar_tab"] == "targets"
 
 
 def test_processing_range_update_clears_existing_anchor_and_masks(

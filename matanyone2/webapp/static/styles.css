@@ -1363,6 +1363,189 @@ button {
   text-decoration: none;
 }
 
+.workspace-shell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.workspace-header {
+  min-height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: var(--space-5) var(--space-6);
+}
+
+.workspace-header__copy,
+.workspace-header__controls {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.workspace-header__controls {
+  justify-items: end;
+}
+
+.workflow-stepper,
+.workspace-nav,
+.workspace-sidebar-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.workflow-stepper__step,
+.workspace-sidebar-tab {
+  min-height: 2.5rem;
+  padding: 0.6rem 0.95rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+}
+
+.workflow-stepper__step[data-active],
+.workspace-sidebar-tab[data-active],
+#compare-toggle[data-active] {
+  border-color: rgba(118, 199, 255, 0.44);
+  background: rgba(29, 69, 100, 0.42);
+  color: var(--text);
+}
+
+.workspace-layout {
+  display: grid;
+  grid-template-columns: minmax(18rem, 21rem) minmax(0, 1fr) minmax(18rem, 22rem);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.workspace-sidebar,
+.workspace-review-sidebar,
+.workspace-monitor,
+.workspace-timeline-dock,
+.compare-drawer {
+  min-height: auto;
+}
+
+.workspace-sidebar {
+  display: grid;
+  gap: var(--space-4);
+  position: sticky;
+  top: var(--space-8);
+  max-height: calc(100dvh - (var(--space-8) * 2));
+  overflow: auto;
+}
+
+.workspace-sidebar-panel {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.compact-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.compact-context {
+  gap: var(--space-2);
+}
+
+.compact-context div {
+  padding-bottom: var(--space-2);
+}
+
+.workspace-note-card {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.workspace-main {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.workspace-monitor {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.workspace-monitor__header,
+.workspace-monitor__toolbar,
+.workspace-monitor__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.workspace-monitor-frame {
+  display: grid;
+  place-items: center;
+  min-height: min(64vh, 42rem);
+  padding: var(--space-3);
+  border-radius: calc(var(--radius-xl) - 10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.03) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255, 255, 255, 0.03) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, 0.03) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255, 255, 255, 0.03) 75%),
+    rgba(7, 12, 20, 0.72);
+  background-size: 24px 24px;
+  background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+}
+
+.workspace-timeline-dock {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+}
+
+.timeline-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.timeline-row--rail,
+.timeline-row--anchor {
+  display: block;
+}
+
+.timeline-row--anchor {
+  padding-top: var(--space-2);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+#clip-primary-rail {
+  width: 100%;
+}
+
+.compare-drawer {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.workspace-review-sidebar {
+  display: grid;
+  gap: var(--space-4);
+  position: sticky;
+  top: var(--space-8);
+}
+
 @media (max-width: 1280px) {
   .upload-grid {
     grid-template-columns: 1fr;
@@ -1383,6 +1566,10 @@ button {
   }
 
   .results-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-layout {
     grid-template-columns: 1fr;
   }
 
@@ -1411,7 +1598,8 @@ button {
   }
 
   .preview-mode-tabs,
-  .preview-compare-strip {
+  .preview-compare-strip,
+  .compare-drawer {
     grid-template-columns: 1fr;
   }
 

@@ -76,6 +76,10 @@ class DraftSession:
     current_mask_path: Path | None = None
     current_preview_path: Path | None = None
     stage: str = "coarse"
+    workflow_step: str = "clip"
+    active_sidebar_tab: str = "targets"
+    compare_enabled: bool = False
+    latest_job_id: str | None = None
     _target_sequence: int = 0
 
     def __post_init__(self):

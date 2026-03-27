@@ -179,7 +179,7 @@ function bindUploadPage() {
           body,
         })
       );
-      window.location.assign(`/drafts/${payload.draft_id}/annotate`);
+      window.location.assign(`/drafts/${payload.draft_id}/workspace`);
     } catch (error) {
       if (submitButton) {
         submitButton.disabled = false;

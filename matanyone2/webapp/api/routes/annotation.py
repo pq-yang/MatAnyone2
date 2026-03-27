@@ -59,7 +59,13 @@ class DraftProcessingRangePayload(BaseModel):
     end_frame_index: int
 
 
+class DraftWorkflowStepPayload(BaseModel):
+    workflow_step: str
+
+
 router = APIRouter()
+
+WORKFLOW_STEPS = ("clip", "mask", "refine", "review")
 
 STAGE_PRESENTATION = {
     "coarse": {
@@ -121,14 +127,66 @@ def _active_mask_url(session, draft_id: str):
     return None
 
 
+def _active_review_job_url(session) -> str | None:
+    if not session.latest_job_id:
+        return None
+    return f"/api/jobs/{session.latest_job_id}"
+
+
+def _normalize_sidebar_tab(tab_name: str | None) -> str:
+    if tab_name in {"targets", "refine", "export"}:
+        return tab_name
+    return "targets"
+
+
+def _step_index(step_name: str) -> int:
+    try:
+        return WORKFLOW_STEPS.index(step_name)
+    except ValueError:
+        return 0
+
+
+def _sync_workflow_state(session, workflow_step: str) -> None:
+    if workflow_step not in WORKFLOW_STEPS:
+        raise ValueError(f"unknown workflow step: {workflow_step}")
+
+    session.workflow_step = workflow_step
+    if workflow_step == "clip":
+        session.active_sidebar_tab = "targets"
+        session.stage = "coarse"
+    elif workflow_step == "mask":
+        session.active_sidebar_tab = "targets"
+        session.stage = "coarse"
+    elif workflow_step == "refine":
+        session.active_sidebar_tab = "refine"
+        session.stage = "refine"
+    else:
+        session.active_sidebar_tab = "export"
+        session.stage = "preview"
+
+
+def _set_sidebar_tab(session, tab_name: str | None) -> None:
+    session.active_sidebar_tab = _normalize_sidebar_tab(tab_name)
+
+
 def _workbench_payload(session, draft_id: str):
     stage_meta = STAGE_PRESENTATION[session.stage]
     active_target = session.active_target
     target_locked = active_target.locked
     has_template_frame = session.draft.template_frame_index is not None
+    workflow_step = session.workflow_step if session.workflow_step in WORKFLOW_STEPS else "clip"
+    step_index = _step_index(workflow_step)
     return {
         "draft_id": draft_id,
         "stage": session.stage,
+        "workflow_step": workflow_step,
+        "available_steps": list(WORKFLOW_STEPS),
+        "can_go_back": step_index > 0,
+        "can_go_next": step_index < len(WORKFLOW_STEPS) - 1,
+        "active_sidebar_tab": _normalize_sidebar_tab(session.active_sidebar_tab),
+        "compare_enabled": bool(session.compare_enabled),
+        "latest_job_id": session.latest_job_id,
+        "review_status_url": _active_review_job_url(session),
         "stage_label": stage_meta["stage_label"],
         "canvas_mode_label": stage_meta["canvas_mode_label"],
         "stage_note": stage_meta["stage_note"],
@@ -182,6 +240,20 @@ def _workbench_payload(session, draft_id: str):
 @router.get("/api/drafts/{draft_id}")
 def get_workbench_state(draft_id: str, draft_store=Depends(get_draft_store)):
     session = _require_session(draft_store, draft_id)
+    return _workbench_payload(session, draft_id)
+
+
+@router.post("/api/drafts/{draft_id}/workflow-step")
+def set_workflow_step(
+    draft_id: str,
+    payload: DraftWorkflowStepPayload,
+    draft_store=Depends(get_draft_store),
+):
+    session = _require_session(draft_store, draft_id)
+    try:
+        _sync_workflow_state(session, payload.workflow_step)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _workbench_payload(session, draft_id)
 
 
@@ -257,6 +329,7 @@ def set_template_frame(
             session,
             frame_index=payload.frame_index,
         )
+        _sync_workflow_state(session, "mask")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _workbench_payload(session, draft_id)
@@ -278,6 +351,9 @@ def set_processing_range(
             end_frame_index=payload.end_frame_index,
         )
         masking_service.reset_session_for_processing_range(session)
+        session.latest_job_id = None
+        session.compare_enabled = False
+        _sync_workflow_state(session, "clip")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _workbench_payload(session, draft_id)
@@ -295,6 +371,13 @@ def set_stage(
         masking_service.set_stage(session, payload.stage)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if payload.stage == "coarse":
+        _set_sidebar_tab(session, "targets")
+        session.workflow_step = "mask" if session.draft.template_frame_index is not None else "clip"
+    elif payload.stage == "refine":
+        _sync_workflow_state(session, "refine")
+    else:
+        _sync_workflow_state(session, "review" if session.latest_job_id else "review")
     return _workbench_payload(session, draft_id)
 
 
@@ -475,7 +558,14 @@ def submit_draft(
             }
         ),
     )
-    return {"job_id": job.job_id, "status": job.status.value}
+    session.latest_job_id = job.job_id
+    session.compare_enabled = False
+    _sync_workflow_state(session, "review")
+    return {
+        "job_id": job.job_id,
+        "status": job.status.value,
+        "workflow_step": session.workflow_step,
+    }
 
 
 @router.get("/api/drafts/{draft_id}/current-preview")

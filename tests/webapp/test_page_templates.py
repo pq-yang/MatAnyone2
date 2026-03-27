@@ -21,63 +21,68 @@ def test_annotation_page_renders_workbench_layout(
     )
     draft_id = upload_response.json()["draft_id"]
 
-    response = app_client.get(f"/drafts/{draft_id}/annotate")
+    response = app_client.get(f"/drafts/{draft_id}/workspace")
 
     assert response.status_code == 200
-    assert 'class="workbench-shell"' in response.text
+    assert 'id="workspace-app"' in response.text
+    assert 'class="workspace-shell"' in response.text
     assert 'data-default-canvas-mode="source"' in response.text
-    assert 'id="workflow-panel"' in response.text
-    assert 'id="target-controls"' in response.text
-    assert 'id="target-list"' in response.text
-    assert 'id="selection-controls"' in response.text
-    assert 'id="preset-controls"' in response.text
-    assert 'id="brush-controls"' in response.text
-    assert 'id="detail-controls"' in response.text
-    assert 'id="export-selection-panel"' in response.text
-    assert 'id="canvas-stage"' in response.text
-    assert 'id="monitor-header"' in response.text
-    assert 'id="monitor-stage-pills"' in response.text
-    assert 'id="canvas-keyframe-panel"' in response.text
-    assert 'id="source-playhead-slider"' in response.text
-    assert 'id="timeline-range-rail"' in response.text
-    assert 'id="timeline-range-selection"' in response.text
-    assert 'id="mark-range-in"' in response.text
-    assert 'id="mark-range-out"' in response.text
-    assert 'id="clear-range-selection"' in response.text
-    assert 'id="timeline-selected-label"' in response.text
-    assert 'id="timeline-applied-label"' in response.text
-    assert 'id="timeline-in-chip"' in response.text
-    assert 'id="timeline-out-chip"' in response.text
-    assert 'id="timeline-duration-chip"' in response.text
-    assert 'id="anchor-frame-panel"' in response.text
-    assert 'id="layer-panel"' in response.text
-    assert 'id="session-summary"' in response.text
-    assert 'id="canvas-view-tabs"' in response.text
+    assert 'id="workflow-stepper"' in response.text
+    assert 'data-workflow-step="clip"' in response.text
+    assert 'data-workflow-step="mask"' in response.text
+    assert 'data-workflow-step="refine"' in response.text
+    assert 'data-workflow-step="review"' in response.text
+    assert 'id="workspace-monitor"' in response.text
+    assert 'id="workspace-sidebar"' in response.text
+    assert 'id="workspace-sidebar-tabs"' in response.text
+    assert 'id="sidebar-tab-targets"' in response.text
+    assert 'id="sidebar-tab-refine"' in response.text
+    assert 'id="sidebar-tab-export"' in response.text
+    assert 'id="sidebar-panel-targets"' in response.text
+    assert 'id="sidebar-panel-refine"' in response.text
+    assert 'id="sidebar-panel-export"' in response.text
+    assert 'id="monitor-view-tabs"' in response.text
     assert 'data-canvas-mode="source"' in response.text
     assert 'data-canvas-mode="overlay"' in response.text
     assert 'data-canvas-mode="mask"' in response.text
+    assert 'data-canvas-mode="alpha"' in response.text
+    assert 'data-canvas-mode="foreground"' in response.text
+    assert 'id="workspace-monitor-frame"' in response.text
+    assert 'id="workspace-monitor-video"' in response.text
+    assert 'id="workspace-monitor-image"' in response.text
+    assert 'id="workspace-overlay-canvas"' in response.text
+    assert 'id="workspace-timeline-dock"' in response.text
+    assert 'id="clip-primary-rail"' in response.text
+    assert 'id="mark-range-in"' in response.text
+    assert 'id="mark-range-out"' in response.text
+    assert 'id="clear-range-selection"' in response.text
+    assert 'id="timeline-current-label"' in response.text
+    assert 'id="timeline-in-chip"' in response.text
+    assert 'id="timeline-out-chip"' in response.text
+    assert 'id="timeline-duration-chip"' in response.text
+    assert 'id="anchor-rail"' in response.text
+    assert 'id="anchor-frame-slider"' in response.text
+    assert 'id="compare-toggle"' in response.text
+    assert 'id="compare-drawer"' in response.text
     assert 'id="undo-click"' in response.text
     assert 'id="reset-target"' in response.text
-    assert 'id="template-frame-slider"' in response.text
-    assert 'id="keyframe-video"' in response.text
-    assert 'id="anchor-frame-summary"' in response.text
-    assert 'class="keyframe-video-shell"' not in response.text
-    assert response.text.index('id="keyframe-video"') < response.text.index('id="canvas-keyframe-panel"')
     assert 'id="brush-radius"' in response.text
     assert 'id="overlay-opacity"' in response.text
     assert 'id="preset-strength"' in response.text
     assert 'id="motion-strength"' in response.text
     assert 'id="temporal-stability"' in response.text
-    assert 'id="preview-compare-strip"' in response.text
-    assert 'id="preview-before-image"' in response.text
-    assert 'id="preview-live-image"' in response.text
-    assert 'id="canvas-stage-note"' in response.text
-    assert 'id="stage-guidance-title"' in response.text
-    assert 'id="stage-guidance-copy"' in response.text
-    assert 'id="processing-range-start"' not in response.text
-    assert 'id="processing-range-end"' not in response.text
-    assert 'id="apply-processing-range"' not in response.text
-    assert 'id="apply-template-frame"' not in response.text
+    assert 'id="workspace-review-sidebar"' in response.text
+    assert 'id="review-summary-list"' in response.text
+    assert 'id="target-review-list"' in response.text
+    assert 'id="artifact-summary-list"' in response.text
+    assert 'id="workspace-nav-back"' in response.text
+    assert 'id="workspace-nav-next"' in response.text
+    assert 'id="workspace-return-to-clip"' in response.text
+    assert 'id="workspace-return-to-refine"' in response.text
+    assert 'id="preview-compare-strip"' not in response.text
+    assert 'id="keyframe-video"' not in response.text
+    assert 'id="canvas-keyframe-panel"' not in response.text
+    assert 'id="anchor-frame-panel"' not in response.text
 
 
 def test_job_page_renders_review_viewport(app_client: TestClient):
@@ -120,3 +125,19 @@ def test_job_page_keeps_preview_streams_separate_from_download_artifacts(app_cli
     assert response.status_code == 200
     assert 'data-preview-foreground-endpoint' in response.text
     assert 'data-preview-alpha-endpoint' in response.text
+
+
+def test_annotate_route_keeps_workspace_compatibility(
+    app_client: TestClient,
+    sample_video_upload,
+):
+    upload_response = app_client.post(
+        "/api/uploads",
+        files={"video": sample_video_upload},
+    )
+    draft_id = upload_response.json()["draft_id"]
+
+    response = app_client.get(f"/drafts/{draft_id}/annotate")
+
+    assert response.status_code == 200
+    assert 'id="workspace-app"' in response.text

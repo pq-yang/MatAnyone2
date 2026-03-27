@@ -1,0 +1,367 @@
+{% extends "base.html" %}
+{% block title %}Workspace - MatAnyone2{% endblock %}
+{% block page_name %}workspace{% endblock %}
+{% block content %}
+<section
+  id="workspace-app"
+  class="workspace-shell"
+  data-draft-id="{{ draft_id }}"
+  data-workbench-endpoint="/api/drafts/{{ draft_id }}"
+  data-workflow-step-endpoint="/api/drafts/{{ draft_id }}/workflow-step"
+  data-template-frame-endpoint="/api/drafts/{{ draft_id }}/template-frame"
+  data-processing-range-endpoint="/api/drafts/{{ draft_id }}/processing-range"
+  data-targets-endpoint="/api/drafts/{{ draft_id }}/targets"
+  data-stage-endpoint="/api/drafts/{{ draft_id }}/stage"
+  data-click-endpoint="/api/drafts/{{ draft_id }}/click"
+  data-brush-endpoint="/api/drafts/{{ draft_id }}/brush"
+  data-save-endpoint="/api/drafts/{{ draft_id }}/masks"
+  data-submit-endpoint="/api/drafts/{{ draft_id }}/submit"
+  data-source-video-url="/api/drafts/{{ draft_id }}/source-video"
+  data-template-frame-url="/api/drafts/{{ draft_id }}/template-frame"
+  data-default-canvas-mode="source"
+  data-fps="{{ draft.fps }}"
+  data-duration-seconds="{{ draft.duration_seconds }}"
+>
+  <header class="panel workspace-header">
+    <div class="workspace-header__copy">
+      <p class="panel__eyebrow">Session Workspace</p>
+      <h1 class="panel__title">Single-pass clip, matte, refine, review</h1>
+      <div class="workbench-meta">
+        <span>{{ draft.video_path.name }}</span>
+        <span>{{ draft.width }} x {{ draft.height }}</span>
+        <span>{{ "%.2f"|format(draft.duration_seconds) }}s</span>
+      </div>
+    </div>
+
+    <div class="workspace-header__controls">
+      <nav id="workflow-stepper" class="workflow-stepper" aria-label="Workflow steps">
+        <button class="workflow-stepper__step" type="button" data-workflow-step="clip">Clip</button>
+        <button class="workflow-stepper__step" type="button" data-workflow-step="mask">Mask</button>
+        <button class="workflow-stepper__step" type="button" data-workflow-step="refine">Refine</button>
+        <button class="workflow-stepper__step" type="button" data-workflow-step="review">Review</button>
+      </nav>
+
+      <div class="workspace-nav">
+        <button id="workspace-nav-back" class="tool-button tool-button--compact" type="button">Back</button>
+        <button id="workspace-nav-next" class="button button--primary" type="button">Next</button>
+        <button id="workspace-return-to-clip" class="tool-button tool-button--compact" type="button" hidden>
+          Return to Clip
+        </button>
+        <button id="workspace-return-to-refine" class="tool-button tool-button--compact" type="button" hidden>
+          Return to Refine
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="workspace-layout">
+    <aside id="workspace-sidebar" class="panel workspace-sidebar">
+      <div id="workspace-sidebar-tabs" class="workspace-sidebar-tabs" role="tablist" aria-label="Inspector tabs">
+        <button id="sidebar-tab-targets" class="workspace-sidebar-tab" type="button" data-sidebar-tab="targets">Targets</button>
+        <button id="sidebar-tab-refine" class="workspace-sidebar-tab" type="button" data-sidebar-tab="refine">Refine</button>
+        <button id="sidebar-tab-export" class="workspace-sidebar-tab" type="button" data-sidebar-tab="export">Export</button>
+      </div>
+
+      <section id="sidebar-panel-targets" class="workspace-sidebar-panel">
+        <div class="compact-summary">
+          <span id="workflow-stage-chip" class="status-chip status-chip--muted">Clip</span>
+          <span id="canvas-mode-label" class="status-chip status-chip--muted">Source monitor</span>
+        </div>
+
+        <div class="workflow-section">
+          <div class="workflow-section__header">
+            <div>
+              <p class="panel__eyebrow">Context</p>
+              <h2 class="workflow-section__title">Current session</h2>
+            </div>
+          </div>
+          <dl class="meta-list meta-list--stacked meta-list--compact compact-context">
+            <div><dt>Stage</dt><dd id="inspector-stage">clip</dd></div>
+            <div><dt>Active Target</dt><dd id="inspector-target">Target 1</dd></div>
+            <div><dt>Preset</dt><dd id="inspector-preset">Balanced</dd></div>
+            <div><dt>Current Points</dt><dd id="inspector-points">0</dd></div>
+            <div><dt>Saved Mask</dt><dd id="inspector-mask">Not saved yet</dd></div>
+          </dl>
+          <div class="workspace-note-card">
+            <p class="panel__eyebrow">Guidance</p>
+            <h3 id="stage-guidance-title" class="guidance-card__title">Clip</h3>
+            <p id="stage-guidance-copy" class="panel-note">
+              Mark a clean segment first, then choose an anchor frame inside it before you start clicking.
+            </p>
+          </div>
+        </div>
+
+        <div id="target-controls" class="workflow-section">
+          <div class="workflow-section__header">
+            <div>
+              <p class="panel__eyebrow">Targets</p>
+              <h2 class="workflow-section__title">Layer stack</h2>
+            </div>
+            <button id="create-target" class="button button--ghost workflow-inline-button" type="button">New Target</button>
+          </div>
+          <div id="target-list" class="target-list"></div>
+          <label class="workflow-field">
+            <span class="workflow-field__label">Target name</span>
+            <input id="target-name-input" class="workflow-input" type="text" placeholder="Target 1">
+          </label>
+          <div class="workflow-inline-actions">
+            <button id="apply-target-name" class="tool-button tool-button--compact" type="button">Apply Name</button>
+            <button id="toggle-target-lock" class="tool-button tool-button--compact" type="button">Lock Target</button>
+          </div>
+          <p id="target-summary" class="panel-note">Keep each character isolated in its own saved target.</p>
+        </div>
+
+        <div id="selection-controls" class="workflow-section">
+          <div class="workflow-section__header">
+            <div>
+              <p class="panel__eyebrow">Mask</p>
+              <h2 class="workflow-section__title">Point-based selection</h2>
+            </div>
+          </div>
+          <div class="tool-grid">
+            <button id="positive-mode" class="tool-button" type="button" data-positive="true">Positive Point</button>
+            <button id="negative-mode" class="tool-button" type="button" data-positive="false">Negative Point</button>
+            <button id="undo-click" class="tool-button tool-button--ghost" type="button">Undo Point</button>
+            <button id="reset-target" class="tool-button tool-button--ghost" type="button">Reset Target</button>
+          </div>
+          <p id="selection-note" class="panel-note">
+            Use only a few decisive points. Switch to Refine when the silhouette is roughly correct.
+          </p>
+        </div>
+      </section>
+
+      <section id="sidebar-panel-refine" class="workspace-sidebar-panel" hidden>
+        <div id="preset-controls" class="workflow-section">
+          <div class="workflow-section__header">
+            <div>
+              <p class="panel__eyebrow">Refine Preset</p>
+              <h2 class="workflow-section__title">Detail intent</h2>
+            </div>
+          </div>
+          <div class="preset-grid">
+            <button class="tool-button preset-button" type="button" data-preset="balanced">Balanced</button>
+            <button class="tool-button preset-button" type="button" data-preset="hair">Hair</button>
+            <button class="tool-button preset-button" type="button" data-preset="edge">Edge</button>
+            <button class="tool-button preset-button" type="button" data-preset="motion">Motion</button>
+          </div>
+          <p id="preset-note" class="panel-note">Bias the current target toward wispy hair, tighter edges, or softer motion.</p>
+        </div>
+
+        <div id="brush-controls" class="workflow-section">
+          <div class="workflow-section__header">
+            <div>
+              <p class="panel__eyebrow">Brush</p>
+              <h2 class="workflow-section__title">Manual edge cleanup</h2>
+            </div>
+          </div>
+          <div class="tool-grid">
+            <button id="brush-add" class="tool-button brush-button" type="button" data-brush-mode="add">Add Area</button>
+            <button id="brush-remove" class="tool-button brush-button" type="button" data-brush-mode="remove">Remove Area</button>
+            <button id="brush-feather" class="tool-button brush-button" type="button" data-brush-mode="feather">Feather</button>
+          </div>
+          <p id="brush-note" class="panel-note">Use brush cleanup once the anchor matte is close but still misses hairlines or soft edges.</p>
+        </div>
+
+        <div id="detail-controls" class="workflow-section">
+          <div class="workflow-section__header">
+            <div>
+              <p class="panel__eyebrow">Controls</p>
+              <h2 class="workflow-section__title">Refine intensity</h2>
+            </div>
+          </div>
+          <div class="slider-stack">
+            <label class="workflow-field" for="preset-strength">
+              <span class="workflow-field__label">Preset strength <output id="preset-strength-value" for="preset-strength">50%</output></span>
+              <input id="preset-strength" type="range" min="0" max="100" value="50">
+            </label>
+            <label class="workflow-field" for="motion-strength">
+              <span class="workflow-field__label">Motion softness <output id="motion-strength-value" for="motion-strength">35%</output></span>
+              <input id="motion-strength" type="range" min="0" max="100" value="35">
+            </label>
+            <label class="workflow-field" for="temporal-stability">
+              <span class="workflow-field__label">Temporal stability <output id="temporal-stability-value" for="temporal-stability">0%</output></span>
+              <input id="temporal-stability" type="range" min="0" max="100" value="0">
+            </label>
+            <label class="workflow-field" for="brush-radius">
+              <span class="workflow-field__label">Brush size <output id="brush-radius-value" for="brush-radius">28 px</output></span>
+              <input id="brush-radius" type="range" min="6" max="80" value="28">
+            </label>
+            <label class="workflow-field" for="overlay-opacity">
+              <span class="workflow-field__label">Overlay opacity <output id="overlay-opacity-value" for="overlay-opacity">72%</output></span>
+              <input id="overlay-opacity" type="range" min="25" max="100" value="72">
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section id="sidebar-panel-export" class="workspace-sidebar-panel" hidden>
+        <div id="export-selection-panel" class="workflow-section">
+          <div class="workflow-section__header">
+            <div>
+              <p class="panel__eyebrow">Export</p>
+              <h2 class="workflow-section__title">Saved targets</h2>
+            </div>
+          </div>
+          <div id="saved-mask-list" class="saved-mask-list">
+            {% for mask_name in saved_masks %}
+            <label>
+              <input type="checkbox" name="mask_name" value="{{ mask_name }}" checked>
+              {{ mask_name }}
+            </label>
+            {% endfor %}
+          </div>
+          <div class="workflow-action-bar">
+            <button id="save-mask" class="button button--ghost" type="button">Save Current Target</button>
+            <button id="submit-job" class="button button--primary" type="button">Submit Matting Job</button>
+          </div>
+          <p class="panel-note">Only checked masks are merged into the MatAnyone2 job.</p>
+        </div>
+
+        <div class="workflow-section workspace-export-summary">
+          <div class="workflow-section__header">
+            <div>
+              <p class="panel__eyebrow">Review</p>
+              <h2 class="workflow-section__title">Current job context</h2>
+            </div>
+          </div>
+          <dl id="review-summary-list" class="meta-list meta-list--stacked compact-context"></dl>
+        </div>
+      </section>
+    </aside>
+
+    <section class="workspace-main">
+      <section id="workspace-monitor" class="panel workspace-monitor">
+        <header class="workspace-monitor__header">
+          <div>
+            <p class="panel__eyebrow">Main Monitor</p>
+            <h2 class="panel__title">Single viewer for clip, mask, refine, and review</h2>
+          </div>
+          <div class="workspace-monitor__toolbar">
+            <div id="monitor-view-tabs" class="canvas-view-tabs">
+              <button class="canvas-view-tab" type="button" data-canvas-mode="source">Source</button>
+              <button class="canvas-view-tab" type="button" data-canvas-mode="overlay">Overlay</button>
+              <button class="canvas-view-tab" type="button" data-canvas-mode="mask">Mask</button>
+              <button class="canvas-view-tab" type="button" data-canvas-mode="alpha">Alpha</button>
+              <button class="canvas-view-tab" type="button" data-canvas-mode="foreground">Foreground</button>
+            </div>
+            <button id="compare-toggle" class="tool-button tool-button--compact" type="button">Compare</button>
+          </div>
+        </header>
+
+        <div id="workspace-monitor-frame" class="workspace-monitor-frame">
+          <video
+            id="workspace-monitor-video"
+            class="canvas-media canvas-media--video"
+            src="/api/drafts/{{ draft_id }}/source-video"
+            preload="metadata"
+            controls
+            muted
+            playsinline
+          ></video>
+          <img
+            id="workspace-monitor-image"
+            class="canvas-media canvas-media--image"
+            src="/api/drafts/{{ draft_id }}/template-frame"
+            alt="Template frame"
+            hidden
+          >
+          <canvas id="workspace-overlay-canvas" class="preview-overlay-canvas" hidden></canvas>
+          <video id="workspace-overlay-foreground-video" playsinline muted preload="metadata" hidden></video>
+          <video id="workspace-overlay-alpha-video" playsinline muted preload="metadata" hidden></video>
+        </div>
+
+        <div class="workspace-monitor__footer">
+          <span id="workspace-monitor-caption" class="status-chip status-chip--muted">Source monitor</span>
+          <p id="workspace-status" class="status-text" aria-live="polite"></p>
+        </div>
+      </section>
+
+      <section id="workspace-timeline-dock" class="panel workspace-timeline-dock" aria-label="Clip and anchor timeline">
+        <div class="timeline-row timeline-row--rail">
+          <div id="clip-primary-rail" class="timeline-range-rail">
+            <div id="timeline-range-selection" class="timeline-range-selection"></div>
+            <input id="source-playhead-slider" class="source-playhead-slider" type="range" min="0" max="{{ draft.frame_count - 1 }}" value="{{ draft.template_frame_index if draft.template_frame_index is not none else draft.process_start_frame_index }}">
+          </div>
+        </div>
+
+        <div class="timeline-row timeline-row--actions">
+          <div class="timeline-inline-actions">
+            <button id="mark-range-in" class="tool-button tool-button--compact" type="button">Mark In</button>
+            <button id="mark-range-out" class="tool-button tool-button--compact" type="button">Mark Out</button>
+            <button id="clear-range-selection" class="tool-button tool-button--ghost tool-button--compact" type="button">Clear</button>
+            <button id="toggle-source-playback" class="tool-button tool-button--compact" type="button">Play</button>
+          </div>
+          <div class="timeline-chip-row">
+            <span id="timeline-current-label" class="timeline-chip">Playhead</span>
+            <span id="timeline-in-chip" class="timeline-chip timeline-chip--outline">In</span>
+            <span id="timeline-out-chip" class="timeline-chip timeline-chip--outline">Out</span>
+            <span id="timeline-duration-chip" class="timeline-chip timeline-chip--outline">Duration</span>
+          </div>
+        </div>
+
+        <div id="anchor-rail" class="timeline-row timeline-row--anchor">
+          <label class="workflow-field" for="anchor-frame-slider">
+            <span class="workflow-field__label">
+              Inference anchor
+              <output id="anchor-frame-value" for="anchor-frame-slider">0</output>
+            </span>
+            <input id="anchor-frame-slider" type="range" min="{{ draft.process_start_frame_index }}" max="{{ draft.process_end_frame_index }}" value="{{ draft.template_frame_index if draft.template_frame_index is not none else draft.process_start_frame_index }}">
+          </label>
+        </div>
+      </section>
+
+      <section id="compare-drawer" class="panel compare-drawer" hidden>
+        <div class="preview-compare-card">
+          <p class="panel__eyebrow">Before</p>
+          <img id="preview-before-image" src="/api/drafts/{{ draft_id }}/template-frame" alt="Previous preview state">
+        </div>
+        <div class="preview-compare-card">
+          <p class="panel__eyebrow">Live</p>
+          <img id="preview-live-image" src="/api/drafts/{{ draft_id }}/template-frame" alt="Current preview state">
+        </div>
+      </section>
+    </section>
+
+    <aside id="workspace-review-sidebar" class="panel workspace-review-sidebar">
+      <section class="workflow-section">
+        <div class="workflow-section__header">
+          <div>
+            <p class="panel__eyebrow">Review</p>
+            <h2 class="workflow-section__title">Job inspection</h2>
+          </div>
+        </div>
+        <dl id="review-summary-list-side" class="meta-list meta-list--stacked compact-context"></dl>
+        <ol id="job-timeline" class="job-timeline"></ol>
+      </section>
+
+      <section class="workflow-section">
+        <div class="workflow-section__header">
+          <div>
+            <p class="panel__eyebrow">Target Review</p>
+            <h2 class="workflow-section__title">Included targets</h2>
+          </div>
+        </div>
+        <ul id="target-review-list" class="target-review-list"></ul>
+      </section>
+
+      <section class="workflow-section">
+        <div class="workflow-section__header">
+          <div>
+            <p class="panel__eyebrow">Artifacts</p>
+            <h2 class="workflow-section__title">Download set</h2>
+          </div>
+        </div>
+        <ul id="artifact-summary-list" class="artifact-summary-list"></ul>
+      </section>
+
+      <section id="warning-panel" class="warning-panel" hidden>
+        <p id="warning-title" class="warning-panel__title"></p>
+        <p id="warning-copy" class="status-text"></p>
+      </section>
+    </aside>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script type="module" src="/static/workspace.js"></script>
+{% endblock %}
