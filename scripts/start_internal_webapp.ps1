@@ -64,6 +64,7 @@ $environment = @{
     MATANYONE2_WEBAPP_RUNTIME_ROOT = $config.runtime_root
     MATANYONE2_WEBAPP_DATABASE_PATH = $config.database_path
     MATANYONE2_WEBAPP_ENABLE_PRORES = "1"
+    MATANYONE2_WEBAPP_SAM_BACKEND = "sam3"
     PYTHONIOENCODING = "utf-8"
 }
 if ($env:MATANYONE2_WEBAPP_SAM_MODEL_TYPE) {
@@ -77,6 +78,11 @@ if ($env:MATANYONE2_WEBAPP_SAM2_VARIANT) {
 }
 if ($env:MATANYONE2_WEBAPP_SAM2_CHECKPOINT_PATH) {
     $environment["MATANYONE2_WEBAPP_SAM2_CHECKPOINT_PATH"] = $env:MATANYONE2_WEBAPP_SAM2_CHECKPOINT_PATH
+}
+if ($env:MATANYONE2_WEBAPP_SAM3_CHECKPOINT_PATH) {
+    $environment["MATANYONE2_WEBAPP_SAM3_CHECKPOINT_PATH"] = $env:MATANYONE2_WEBAPP_SAM3_CHECKPOINT_PATH
+} elseif (Test-Path -LiteralPath "D:\my_app\lens_hunter2\models\sam3\checkpoints\sam3.pt") {
+    $environment["MATANYONE2_WEBAPP_SAM3_CHECKPOINT_PATH"] = "D:\my_app\lens_hunter2\models\sam3\checkpoints\sam3.pt"
 }
 
 $webappCommand = New-InternalWebAppCommand `

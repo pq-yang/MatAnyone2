@@ -100,3 +100,27 @@ def test_export_prores_uses_alpha_capable_ffmpeg_command(tmp_path, monkeypatch):
     assert "prores_ks" in captured["command"]
     assert "yuva444p10le" in captured["command"]
     assert "23.976" in captured["command"]
+
+
+def test_apply_motion_softness_blurs_alpha_frame_when_requested():
+    service = ExportService(enable_prores=False)
+    alpha = np.zeros((7, 7), dtype=np.uint8)
+    alpha[3, 3] = 255
+
+    softened = service._apply_motion_softness(alpha, motion_strength=1.0)
+
+    assert softened[3, 3] < 255
+    assert int(softened.sum()) > 255
+
+
+def test_stabilize_alpha_frames_blends_adjacent_frames():
+    service = ExportService(enable_prores=False)
+    alpha_frames = [
+        np.zeros((4, 4), dtype=np.uint8),
+        np.full((4, 4), 255, dtype=np.uint8),
+    ]
+
+    stabilized = service._stabilize_alpha_frames(alpha_frames, temporal_stability=0.5)
+
+    assert stabilized[0].shape == (4, 4)
+    assert 0 < int(stabilized[1].mean()) < 255

@@ -42,6 +42,7 @@ class DraftRecord:
     fps: float
     frame_count: int
     duration_seconds: float
+    template_frame_index: int = 0
 
 
 @dataclass(slots=True)
@@ -54,6 +55,9 @@ class AnnotationTarget:
     visible: bool = True
     locked: bool = False
     refine_preset: str = "balanced"
+    preset_strength: float = 0.5
+    motion_strength: float = 0.35
+    temporal_stability: float = 0.0
 
 
 @dataclass(slots=True)

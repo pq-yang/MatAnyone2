@@ -27,6 +27,8 @@ def test_annotation_page_renders_workbench_layout(
     assert 'class="workbench-shell"' in response.text
     assert 'id="workflow-panel"' in response.text
     assert 'id="target-controls"' in response.text
+    assert 'id="target-list"' in response.text
+    assert 'id="keyframe-controls"' in response.text
     assert 'id="selection-controls"' in response.text
     assert 'id="preset-controls"' in response.text
     assert 'id="brush-controls"' in response.text
@@ -41,8 +43,15 @@ def test_annotation_page_renders_workbench_layout(
     assert 'data-canvas-mode="mask"' in response.text
     assert 'id="undo-click"' in response.text
     assert 'id="reset-target"' in response.text
+    assert 'id="stage-back"' in response.text
+    assert 'id="stage-forward"' in response.text
+    assert 'id="template-frame-slider"' in response.text
+    assert 'id="apply-template-frame"' in response.text
     assert 'id="brush-radius"' in response.text
     assert 'id="overlay-opacity"' in response.text
+    assert 'id="preset-strength"' in response.text
+    assert 'id="motion-strength"' in response.text
+    assert 'id="temporal-stability"' in response.text
     assert 'id="canvas-stage-note"' in response.text
     assert 'id="stage-guidance-title"' in response.text
     assert 'id="stage-guidance-copy"' in response.text

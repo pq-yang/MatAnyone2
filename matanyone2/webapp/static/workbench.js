@@ -65,6 +65,17 @@ function bindWorkbench() {
   const brushRadiusValue = document.getElementById("brush-radius-value");
   const overlayOpacityInput = document.getElementById("overlay-opacity");
   const overlayOpacityValue = document.getElementById("overlay-opacity-value");
+  const stageBackButton = document.getElementById("stage-back");
+  const stageForwardButton = document.getElementById("stage-forward");
+  const templateFrameSlider = document.getElementById("template-frame-slider");
+  const templateFrameValue = document.getElementById("template-frame-value");
+  const applyTemplateFrameButton = document.getElementById("apply-template-frame");
+  const presetStrengthInput = document.getElementById("preset-strength");
+  const presetStrengthValue = document.getElementById("preset-strength-value");
+  const motionStrengthInput = document.getElementById("motion-strength");
+  const motionStrengthValue = document.getElementById("motion-strength-value");
+  const temporalStabilityInput = document.getElementById("temporal-stability");
+  const temporalStabilityValue = document.getElementById("temporal-stability-value");
 
   const state = {
     activeTool: "point-positive",
@@ -73,7 +84,10 @@ function bindWorkbench() {
     selectedMasks: new Set(),
     brushRadius: Number(brushRadiusInput?.value || 28),
     overlayOpacity: Number(overlayOpacityInput?.value || 72),
+    templateFrameSelection: Number(templateFrameSlider?.value || 0),
   };
+
+  const STAGE_ORDER = ["coarse", "refine", "preview"];
 
   function isTypingContext(target) {
     if (!(target instanceof HTMLElement)) {
@@ -98,6 +112,33 @@ function bindWorkbench() {
 
   function activePreset(payload = state.workbench) {
     return activeTarget(payload)?.refine_preset || "balanced";
+  }
+
+  function updateRangeOutput(outputElement, value, suffix = "%") {
+    if (!outputElement) {
+      return;
+    }
+    outputElement.value = `${value}${suffix}`;
+    outputElement.textContent = `${value}${suffix}`;
+  }
+
+  function syncTargetControls(payload) {
+    const currentTarget = activeTarget(payload);
+    if (!currentTarget) {
+      return;
+    }
+    if (presetStrengthInput) {
+      presetStrengthInput.value = String(Math.round((currentTarget.preset_strength || 0) * 100));
+      updateRangeOutput(presetStrengthValue, Number(presetStrengthInput.value));
+    }
+    if (motionStrengthInput) {
+      motionStrengthInput.value = String(Math.round((currentTarget.motion_strength || 0) * 100));
+      updateRangeOutput(motionStrengthValue, Number(motionStrengthInput.value));
+    }
+    if (temporalStabilityInput) {
+      temporalStabilityInput.value = String(Math.round((currentTarget.temporal_stability || 0) * 100));
+      updateRangeOutput(temporalStabilityValue, Number(temporalStabilityInput.value));
+    }
   }
 
   function applyImagePresentation() {
@@ -284,6 +325,16 @@ function bindWorkbench() {
     saveButton?.toggleAttribute("disabled", !payload.can_save_current_target);
     submitButton?.toggleAttribute("disabled", !canSubmit);
     applyTargetNameButton?.toggleAttribute("disabled", !payload.active_target_id);
+    stageBackButton?.toggleAttribute("disabled", payload.stage === "coarse");
+    stageForwardButton?.toggleAttribute("disabled", payload.stage === "preview");
+    if (applyTemplateFrameButton) {
+      const sameFrame = Number(templateFrameSlider?.value || 0) === Number(payload.template_frame_index || 0);
+      applyTemplateFrameButton.toggleAttribute(
+        "disabled",
+        !payload.can_change_template_frame || sameFrame
+      );
+    }
+    templateFrameSlider?.toggleAttribute("disabled", !payload.can_change_template_frame);
 
     const currentTarget = activeTarget(payload);
     toggleTargetLockButton?.toggleAttribute("disabled", !currentTarget);
@@ -362,8 +413,10 @@ function bindWorkbench() {
   function renderWorkbench(payload) {
     state.workbench = payload;
     syncSelectedMasks(payload);
+    state.templateFrameSelection = Number(payload.template_frame_index || 0);
 
     const currentTarget = activeTarget(payload);
+    syncTargetControls(payload);
 
     syncCanvasMode(payload);
     syncPresetButtons(payload);
@@ -409,6 +462,11 @@ function bindWorkbench() {
       targetNameInput.value = currentTarget.name;
       targetNameInput.disabled = false;
     }
+    if (templateFrameSlider) {
+      templateFrameSlider.max = String(Math.max(0, (payload.frame_count || 1) - 1));
+      templateFrameSlider.value = String(payload.template_frame_index || 0);
+    }
+    updateRangeOutput(templateFrameValue, Number(payload.template_frame_index || 0), "");
     if (targetSummary) {
       targetSummary.textContent = currentTarget
         ? `${currentTarget.name} is ${currentTarget.visible ? "visible" : "hidden"}, ${currentTarget.locked ? "locked" : "editable"}, and uses the ${PRESET_META[currentTarget.refine_preset]?.label || "Balanced"} preset.`
@@ -462,11 +520,84 @@ function bindWorkbench() {
 
   overlayOpacityInput?.addEventListener("input", () => {
     state.overlayOpacity = Number(overlayOpacityInput.value);
-    if (overlayOpacityValue) {
-      overlayOpacityValue.value = `${state.overlayOpacity}%`;
-      overlayOpacityValue.textContent = `${state.overlayOpacity}%`;
-    }
+    updateRangeOutput(overlayOpacityValue, state.overlayOpacity);
     applyImagePresentation();
+  });
+
+  templateFrameSlider?.addEventListener("input", () => {
+    state.templateFrameSelection = Number(templateFrameSlider.value);
+    updateRangeOutput(templateFrameValue, state.templateFrameSelection, "");
+    syncActionState(state.workbench);
+  });
+
+  async function patchActiveTarget(patch, pendingMessage, successMessage) {
+    const currentTarget = activeTarget();
+    if (!currentTarget) {
+      return;
+    }
+    await updateTarget(
+      currentTarget.target_id,
+      patch,
+      pendingMessage,
+      successMessage
+    );
+  }
+
+  presetStrengthInput?.addEventListener("input", () => {
+    updateRangeOutput(presetStrengthValue, Number(presetStrengthInput.value));
+  });
+  presetStrengthInput?.addEventListener("change", async () => {
+    await patchActiveTarget(
+      { preset_strength: Number(presetStrengthInput.value) / 100 },
+      "Updating preset strength...",
+      () => "Preset strength updated."
+    );
+  });
+
+  motionStrengthInput?.addEventListener("input", () => {
+    updateRangeOutput(motionStrengthValue, Number(motionStrengthInput.value));
+  });
+  motionStrengthInput?.addEventListener("change", async () => {
+    await patchActiveTarget(
+      { motion_strength: Number(motionStrengthInput.value) / 100 },
+      "Updating motion softness...",
+      () => "Motion softness updated."
+    );
+  });
+
+  temporalStabilityInput?.addEventListener("input", () => {
+    updateRangeOutput(temporalStabilityValue, Number(temporalStabilityInput.value));
+  });
+  temporalStabilityInput?.addEventListener("change", async () => {
+    await patchActiveTarget(
+      { temporal_stability: Number(temporalStabilityInput.value) / 100 },
+      "Updating temporal stability...",
+      () => "Temporal stability updated."
+    );
+  });
+
+  applyTemplateFrameButton?.addEventListener("click", async () => {
+    if (applyTemplateFrameButton.disabled) {
+      return;
+    }
+    setStatus(status, `Switching template frame to ${state.templateFrameSelection}...`, false);
+    try {
+      const payload = await parseJson(
+        await fetch(root.dataset.templateFrameEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ frame_index: state.templateFrameSelection }),
+        })
+      );
+      renderWorkbench(payload);
+      setStatus(
+        status,
+        `Template frame ${payload.template_frame_index} is now active. Existing unsaved annotations were reset.`,
+        false
+      );
+    } catch (error) {
+      setStatus(status, error.message, true);
+    }
   });
 
   viewButtons.forEach((button) => {
@@ -496,6 +627,22 @@ function bindWorkbench() {
       }
     });
   });
+
+  function moveStage(offset) {
+    if (!state.workbench) {
+      return;
+    }
+    const currentIndex = STAGE_ORDER.indexOf(state.workbench.stage);
+    const nextIndex = Math.min(Math.max(currentIndex + offset, 0), STAGE_ORDER.length - 1);
+    const nextStage = STAGE_ORDER[nextIndex];
+    if (nextStage === state.workbench.stage) {
+      return;
+    }
+    stageButtons.find((button) => button.dataset.stage === nextStage)?.click();
+  }
+
+  stageBackButton?.addEventListener("click", () => moveStage(-1));
+  stageForwardButton?.addEventListener("click", () => moveStage(1));
 
   presetButtons.forEach((button) => {
     button.addEventListener("click", async () => {
@@ -682,7 +829,7 @@ function bindWorkbench() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            template_frame_index: 0,
+            template_frame_index: state.workbench?.template_frame_index ?? 0,
             selected_masks: selectedMasks,
           }),
         })
@@ -740,6 +887,20 @@ function bindWorkbench() {
         event.preventDefault();
         resetButton?.click();
         return;
+      case "ArrowLeft":
+        if (!typingContext) {
+          event.preventDefault();
+          moveStage(-1);
+          return;
+        }
+        break;
+      case "ArrowRight":
+        if (!typingContext) {
+          event.preventDefault();
+          moveStage(1);
+          return;
+        }
+        break;
       default:
         break;
     }

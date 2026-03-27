@@ -156,21 +156,13 @@ def test_poll_jobs_accepts_completed_with_warning():
     assert statuses["job-2"]["status"] == "completed"
 
 
-def test_build_service_env_defaults_to_sam2_and_preserves_overrides(monkeypatch, tmp_path):
+def test_build_service_env_defaults_to_sam3_and_preserves_overrides(monkeypatch, tmp_path):
     monkeypatch.delenv("MATANYONE2_WEBAPP_SAM_BACKEND", raising=False)
     monkeypatch.delenv("MATANYONE2_WEBAPP_SAM_MODEL_TYPE", raising=False)
-    monkeypatch.setenv("MATANYONE2_WEBAPP_SAM2_VARIANT", "sam2.1_hiera_base_plus")
-    monkeypatch.setenv(
-        "MATANYONE2_WEBAPP_SAM2_CHECKPOINT_PATH",
-        r"D:\models\sam2.1_hiera_base_plus.pt",
-    )
+    monkeypatch.setenv("MATANYONE2_WEBAPP_SAM3_CHECKPOINT_PATH", r"D:\models\sam3.pt")
 
     env = build_service_env(tmp_path / "runtime", enable_prores=True)
 
-    assert env["MATANYONE2_WEBAPP_SAM_BACKEND"] == "sam2"
-    assert env["MATANYONE2_WEBAPP_SAM2_VARIANT"] == "sam2.1_hiera_base_plus"
-    assert (
-        env["MATANYONE2_WEBAPP_SAM2_CHECKPOINT_PATH"]
-        == r"D:\models\sam2.1_hiera_base_plus.pt"
-    )
+    assert env["MATANYONE2_WEBAPP_SAM_BACKEND"] == "sam3"
+    assert env["MATANYONE2_WEBAPP_SAM3_CHECKPOINT_PATH"] == r"D:\models\sam3.pt"
     assert "MATANYONE2_WEBAPP_SAM_MODEL_TYPE" not in env

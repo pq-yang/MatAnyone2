@@ -1,5 +1,8 @@
 import numpy as np
 from pathlib import Path
+import sys
+import types
+from importlib.machinery import ModuleSpec
 
 from PIL import Image, ImageDraw, ImageFilter
 
@@ -36,6 +39,65 @@ PRESET_LABELS = {
     "edge": "Edge Priority",
     "motion": "Motion Blur",
 }
+
+
+def _rewrite_sam3_editable_mapping_if_needed() -> None:
+    local_repo_root = Path(r"D:\my_app\lens_hunter2\models\sam3\sam3_repo\sam3")
+    if not local_repo_root.exists():
+        return
+    try:
+        import __editable___sam3_0_1_0_finder as sam3_editable_finder
+    except ImportError:
+        return
+
+    current_root = sam3_editable_finder.MAPPING.get("sam3")
+    if current_root == str(local_repo_root):
+        return
+
+    sam3_editable_finder.MAPPING["sam3"] = str(local_repo_root)
+    for namespace, paths in list(sam3_editable_finder.NAMESPACES.items()):
+        rewritten = []
+        for path in paths:
+            if current_root and path.startswith(current_root):
+                rewritten.append(path.replace(current_root, str(local_repo_root), 1))
+            else:
+                rewritten.append(path)
+        sam3_editable_finder.NAMESPACES[namespace] = rewritten
+
+
+def _install_triton_stub_if_needed() -> None:
+    try:
+        import triton  # noqa: F401
+        import triton.language  # noqa: F401
+        return
+    except ImportError:
+        pass
+
+    triton_module = types.ModuleType("triton")
+    triton_language_module = types.ModuleType("triton.language")
+
+    def _jit(function=None, **_kwargs):
+        if function is None:
+            def _decorator(inner):
+                return inner
+            return _decorator
+        return function
+
+    class _MissingTritonSymbol:
+        def __call__(self, *args, **kwargs):
+            raise RuntimeError("SAM3 requested a Triton-only code path that is unavailable on this runtime")
+
+    def _missing_attr(_name):
+        return _MissingTritonSymbol()
+
+    triton_module.jit = _jit
+    triton_module.__spec__ = ModuleSpec("triton", loader=None)
+    triton_language_module.constexpr = object()
+    triton_language_module.__getattr__ = _missing_attr
+    triton_language_module.__spec__ = ModuleSpec("triton.language", loader=None)
+
+    sys.modules.setdefault("triton", triton_module)
+    sys.modules.setdefault("triton.language", triton_language_module)
 
 
 def merge_masks(masks: list[np.ndarray]) -> np.ndarray:
@@ -105,6 +167,41 @@ class Sam2MaskController:
         return mask, scores, painted_image
 
 
+class Sam3MaskController:
+    def __init__(self, predictor_or_model, processor=None):
+        self._predictor = predictor_or_model if processor is None else None
+        self._model = predictor_or_model if processor is not None else None
+        self._processor = processor
+
+    def first_frame_click(self, image, points, labels, multimask=True):
+        if self._processor is None:
+            self._predictor.set_image(image)
+            masks, scores, _ = self._predictor.predict(
+                point_coords=points,
+                point_labels=labels,
+                multimask_output=multimask,
+            )
+        else:
+            inference_state = self._processor.set_image(Image.fromarray(image.astype(np.uint8)))
+            masks, scores, _ = self._model.predict_inst(
+                inference_state,
+                point_coords=points,
+                point_labels=labels,
+                multimask_output=multimask,
+            )
+
+        masks = np.asarray(masks)
+        scores = np.asarray(scores)
+        if masks.ndim == 3:
+            best_index = int(np.argmax(scores)) if scores.size else 0
+            mask = masks[best_index]
+        else:
+            mask = masks
+        mask = mask.astype(np.uint8)
+        painted_image = _render_mask_preview(image, mask, points, labels)
+        return mask, scores, painted_image
+
+
 class MaskingService:
     VALID_STAGES = {"coarse", "refine", "preview"}
     VALID_REFINE_PRESETS = {"balanced", "hair", "edge", "motion"}
@@ -115,10 +212,11 @@ class MaskingService:
         *,
         runtime_root: Path,
         controller_factory=None,
-        sam_backend: str = "sam2",
+        sam_backend: str = "sam3",
         sam_model_type: str = "vit_h",
         sam2_variant: str = "sam2.1_hiera_large",
         sam2_checkpoint_path: str | None = None,
+        sam3_checkpoint_path: str | None = None,
     ):
         self.runtime_root = Path(runtime_root)
         self.controller_factory = controller_factory
@@ -126,6 +224,7 @@ class MaskingService:
         self.sam_model_type = sam_model_type
         self.sam2_variant = sam2_variant
         self.sam2_checkpoint_path = sam2_checkpoint_path
+        self.sam3_checkpoint_path = sam3_checkpoint_path
         self._controller = None
 
     def create_session(self, draft: DraftRecord) -> DraftSession:
@@ -150,6 +249,9 @@ class MaskingService:
         visible: bool | None = None,
         locked: bool | None = None,
         refine_preset: str | None = None,
+        preset_strength: float | None = None,
+        motion_strength: float | None = None,
+        temporal_stability: float | None = None,
     ) -> AnnotationTarget:
         target = session.targets.get(target_id)
         if target is None:
@@ -167,6 +269,26 @@ class MaskingService:
             if refine_preset not in self.VALID_REFINE_PRESETS:
                 raise ValueError(f"unknown refine preset: {refine_preset}")
             target.refine_preset = refine_preset
+        if preset_strength is not None:
+            target.preset_strength = self._validate_unit_interval(
+                preset_strength,
+                field_name="preset_strength",
+            )
+        if motion_strength is not None:
+            target.motion_strength = self._validate_unit_interval(
+                motion_strength,
+                field_name="motion_strength",
+            )
+        if temporal_stability is not None:
+            target.temporal_stability = self._validate_unit_interval(
+                temporal_stability,
+                field_name="temporal_stability",
+            )
+        if (
+            refine_preset is not None
+            or preset_strength is not None
+            or motion_strength is not None
+        ):
             self._rerender_current_from_base(session)
         return target
 
@@ -244,24 +366,60 @@ class MaskingService:
         session.click_labels = []
         self._clear_current_render(session)
 
-    def apply_refine_preset(self, mask: np.ndarray, preset: str) -> np.ndarray:
+    def apply_refine_preset(
+        self,
+        mask: np.ndarray,
+        preset: str,
+        *,
+        preset_strength: float = 0.5,
+        motion_strength: float = 0.35,
+    ) -> np.ndarray:
         if preset not in self.VALID_REFINE_PRESETS:
             raise ValueError(f"unknown refine preset: {preset}")
 
+        preset_strength = self._validate_unit_interval(
+            preset_strength,
+            field_name="preset_strength",
+        )
+        motion_strength = self._validate_unit_interval(
+            motion_strength,
+            field_name="motion_strength",
+        )
         binary_mask = np.where(mask > 127, 255, 0).astype(np.uint8)
         if preset == "balanced":
-            return binary_mask
+            if motion_strength <= 0:
+                return binary_mask
+            softened = Image.fromarray(binary_mask, mode="L").filter(
+                ImageFilter.GaussianBlur(radius=0.4 + (motion_strength * 1.4))
+            )
+            return np.where(np.array(softened, dtype=np.uint8) >= 112, 255, 0).astype(np.uint8)
 
         mask_image = Image.fromarray(binary_mask, mode="L")
         if preset == "hair":
-            processed = mask_image.filter(ImageFilter.MaxFilter(3))
+            filter_size = self._odd_kernel_size(3 + int(round(preset_strength * 4)))
+            processed = mask_image.filter(ImageFilter.MaxFilter(filter_size))
         elif preset == "edge":
-            processed = mask_image.filter(ImageFilter.MinFilter(3))
+            filter_size = self._odd_kernel_size(3 + int(round(preset_strength * 4)))
+            processed = mask_image.filter(ImageFilter.MinFilter(filter_size))
         else:
-            processed = mask_image.filter(ImageFilter.GaussianBlur(radius=1.35))
-            return np.where(np.array(processed, dtype=np.uint8) >= 84, 255, 0).astype(np.uint8)
+            blur_radius = 0.8 + (motion_strength * 2.4)
+            processed = mask_image.filter(ImageFilter.GaussianBlur(radius=blur_radius))
+            threshold = max(36, int(round(112 - (preset_strength * 36))))
+            return np.where(np.array(processed, dtype=np.uint8) >= threshold, 255, 0).astype(np.uint8)
 
         return np.where(np.array(processed, dtype=np.uint8) > 127, 255, 0).astype(np.uint8)
+
+    def reset_session_for_template_frame(self, session: DraftSession, *, frame_index: int) -> None:
+        session.targets = {}
+        session.active_target_id = None
+        session.saved_masks = {}
+        session.saved_mask_presets = {}
+        session.selected_mask_names = set()
+        session.stage = "coarse"
+        session._target_sequence = 0
+        session.draft.template_frame_index = frame_index
+        self._clear_current_render(session)
+        session.create_target()
 
     def _render_active_target(self, session: DraftSession) -> MaskingResult:
         image = np.array(Image.open(session.draft.template_frame_path).convert("RGB"))
@@ -293,6 +451,8 @@ class MaskingService:
         processed_mask = self.apply_refine_preset(
             current_mask,
             session.active_target.refine_preset,
+            preset_strength=session.active_target.preset_strength,
+            motion_strength=session.active_target.motion_strength,
         )
         Image.fromarray(processed_mask, mode="L").save(saved_mask_path)
         session.saved_masks[mask_name] = saved_mask_path
@@ -357,6 +517,12 @@ class MaskingService:
         base_mask = np.where(mask > 0, 255, 0).astype(np.uint8)
         Image.fromarray(base_mask, mode="L").save(current_mask_base_path)
         display_mask = self.apply_refine_preset(base_mask, session.active_target.refine_preset)
+        display_mask = self.apply_refine_preset(
+            base_mask,
+            session.active_target.refine_preset,
+            preset_strength=session.active_target.preset_strength,
+            motion_strength=session.active_target.motion_strength,
+        )
         Image.fromarray(display_mask, mode="L").save(current_mask_path)
 
         image = np.array(Image.open(session.draft.template_frame_path).convert("RGB"))
@@ -405,6 +571,8 @@ class MaskingService:
         self._clear_current_render(session)
 
     def _build_default_controller(self):
+        if self.sam_backend == "sam3":
+            return self._build_sam3_controller()
         if self.sam_backend == "sam2":
             return self._build_sam2_controller()
         if self.sam_backend == "sam1":
@@ -461,3 +629,43 @@ class MaskingService:
             )
         )
         return Sam2MaskController(predictor)
+
+    def _build_sam3_controller(self):
+        from hugging_face.tools.misc import get_device
+
+        _rewrite_sam3_editable_mapping_if_needed()
+        _install_triton_stub_if_needed()
+        try:
+            from sam3 import build_sam3_image_model
+            from sam3.model.sam3_image_processor import Sam3Processor
+        except ImportError as exc:
+            raise RuntimeError(
+                "SAM3 backend is selected but the local 'sam3' runtime could not be imported"
+            ) from exc
+
+        checkpoint_path = self.sam3_checkpoint_path
+        if not checkpoint_path:
+            raise RuntimeError("SAM3 backend requires a checkpoint path")
+
+        model = build_sam3_image_model(
+            checkpoint_path=str(checkpoint_path),
+            device=str(get_device()),
+            load_from_HF=False,
+            enable_inst_interactivity=True,
+        )
+        predictor = getattr(model, "inst_interactive_predictor", None)
+        if predictor is None:
+            raise RuntimeError("SAM3 image model did not expose an interactive predictor")
+        processor = Sam3Processor(model, device=str(get_device()))
+        return Sam3MaskController(model, processor)
+
+    @staticmethod
+    def _validate_unit_interval(value: float, *, field_name: str) -> float:
+        numeric = float(value)
+        if numeric < 0.0 or numeric > 1.0:
+            raise ValueError(f"{field_name} must be between 0.0 and 1.0")
+        return numeric
+
+    @staticmethod
+    def _odd_kernel_size(size: int) -> int:
+        return size if size % 2 == 1 else size + 1

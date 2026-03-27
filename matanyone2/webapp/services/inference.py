@@ -1,6 +1,8 @@
 from pathlib import Path
 import shutil
 
+import cv2
+
 from matanyone2.webapp.models import InferenceResult
 
 
@@ -16,16 +18,82 @@ class InferenceService:
         job_dir: Path,
         template_frame_index: int,
     ) -> InferenceResult:
-        foreground_path, alpha_path = self._run_model(
-            source_video_path=Path(source_video_path),
-            mask_path=Path(mask_path),
-            job_dir=Path(job_dir),
-            template_frame_index=template_frame_index,
-        )
+        source_video_path = Path(source_video_path)
+        mask_path = Path(mask_path)
+        job_dir = Path(job_dir)
+        if template_frame_index > 0:
+            foreground_path, alpha_path = self._run_bidirectional_job(
+                source_video_path=source_video_path,
+                mask_path=mask_path,
+                job_dir=job_dir,
+                template_frame_index=template_frame_index,
+            )
+        else:
+            foreground_path, alpha_path = self._run_model(
+                source_video_path=source_video_path,
+                mask_path=mask_path,
+                job_dir=job_dir,
+                template_frame_index=template_frame_index,
+            )
         return InferenceResult(
             foreground_video_path=foreground_path,
             alpha_video_path=alpha_path,
         )
+
+    def _run_bidirectional_job(
+        self,
+        *,
+        source_video_path: Path,
+        mask_path: Path,
+        job_dir: Path,
+        template_frame_index: int,
+    ) -> tuple[Path, Path]:
+        frames, fps = self._read_video_frames(source_video_path)
+        if not frames:
+            raise RuntimeError("source video has no readable frames")
+        if template_frame_index >= len(frames):
+            raise ValueError("template frame index is out of range for source video")
+
+        forward_frames = frames[template_frame_index:]
+        backward_frames = list(reversed(frames[:template_frame_index + 1]))
+
+        staging_dir = job_dir / "bidirectional"
+        staging_dir.mkdir(parents=True, exist_ok=True)
+        forward_input = staging_dir / "forward_input.mp4"
+        backward_input = staging_dir / "backward_input.mp4"
+        self._write_video_frames(forward_frames, forward_input, fps=fps)
+        self._write_video_frames(backward_frames, backward_input, fps=fps)
+
+        forward_job_dir = staging_dir / "forward_run"
+        backward_job_dir = staging_dir / "backward_run"
+        forward_foreground, forward_alpha = self._run_model(
+            source_video_path=forward_input,
+            mask_path=mask_path,
+            job_dir=forward_job_dir,
+            template_frame_index=0,
+        )
+        backward_foreground, backward_alpha = self._run_model(
+            source_video_path=backward_input,
+            mask_path=mask_path,
+            job_dir=backward_job_dir,
+            template_frame_index=0,
+        )
+
+        foreground_path = job_dir / "foreground.mp4"
+        alpha_path = job_dir / "alpha.mp4"
+        self._stitch_pass_outputs(
+            backward_video_path=backward_foreground,
+            forward_video_path=forward_foreground,
+            output_path=foreground_path,
+            fps=fps,
+        )
+        self._stitch_pass_outputs(
+            backward_video_path=backward_alpha,
+            forward_video_path=forward_alpha,
+            output_path=alpha_path,
+            fps=fps,
+        )
+        return foreground_path, alpha_path
 
     def _run_model(
         self,
@@ -55,3 +123,48 @@ class InferenceService:
         shutil.move(generated_foreground, foreground_path)
         shutil.move(generated_alpha, alpha_path)
         return foreground_path, alpha_path
+
+    def _read_video_frames(self, video_path: Path) -> tuple[list, float]:
+        capture = cv2.VideoCapture(str(video_path))
+        fps = float(capture.get(cv2.CAP_PROP_FPS) or 0.0)
+        frames = []
+        try:
+            while True:
+                ok, frame = capture.read()
+                if not ok:
+                    break
+                frames.append(frame)
+        finally:
+            capture.release()
+        return frames, fps if fps > 0 else 24.0
+
+    def _write_video_frames(self, frames: list, output_path: Path, *, fps: float) -> Path:
+        if not frames:
+            raise RuntimeError("cannot write an empty video")
+        height, width = frames[0].shape[:2]
+        writer = cv2.VideoWriter(
+            str(output_path),
+            cv2.VideoWriter_fourcc(*"mp4v"),
+            fps if fps > 0 else 24.0,
+            (width, height),
+        )
+        try:
+            for frame in frames:
+                writer.write(frame)
+        finally:
+            writer.release()
+        return output_path
+
+    def _stitch_pass_outputs(
+        self,
+        *,
+        backward_video_path: Path,
+        forward_video_path: Path,
+        output_path: Path,
+        fps: float,
+    ) -> Path:
+        backward_frames, _ = self._read_video_frames(backward_video_path)
+        forward_frames, _ = self._read_video_frames(forward_video_path)
+        restored_backward_frames = list(reversed(backward_frames))
+        stitched_frames = restored_backward_frames[:-1] + forward_frames
+        return self._write_video_frames(stitched_frames, output_path, fps=fps)

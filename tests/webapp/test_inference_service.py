@@ -27,6 +27,32 @@ def test_run_job_writes_foreground_and_alpha_outputs(tmp_path, monkeypatch):
     assert result.alpha_video_path.name == "alpha.mp4"
 
 
+def test_run_job_dispatches_bidirectional_flow_for_nonzero_template_frame_index(
+    tmp_path,
+    monkeypatch,
+):
+    service = InferenceService(model_name="MatAnyone 2")
+    job_dir = tmp_path / "job-1"
+    job_dir.mkdir()
+    observed = {}
+
+    def fake_bidirectional(**kwargs):
+        observed.update(kwargs)
+        return Path(job_dir / "foreground.mp4"), Path(job_dir / "alpha.mp4")
+
+    monkeypatch.setattr(service, "_run_bidirectional_job", fake_bidirectional, raising=False)
+
+    result = service.run_job(
+        source_video_path=Path("input.mp4"),
+        mask_path=Path("mask.png"),
+        job_dir=job_dir,
+        template_frame_index=12,
+    )
+
+    assert observed["template_frame_index"] == 12
+    assert result.foreground_video_path.name == "foreground.mp4"
+
+
 def test_get_matanyone2_model_can_be_called_twice_in_same_process(monkeypatch, tmp_path):
     checkpoint_path = tmp_path / "matanyone2.pth"
     checkpoint_path.write_bytes(b"weights")

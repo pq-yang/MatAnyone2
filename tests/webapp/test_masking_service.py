@@ -6,6 +6,7 @@ from matanyone2.webapp.models import DraftRecord
 from matanyone2.webapp.services.masking import (
     MaskingService,
     Sam2MaskController,
+    Sam3MaskController,
     merge_masks,
 )
 
@@ -220,13 +221,52 @@ def test_update_target_mutates_name_visibility_and_lock_state(tmp_path):
     assert updated.locked is True
 
 
-def test_masking_service_defaults_to_sam2_backend(monkeypatch, tmp_path):
+def test_masking_service_defaults_to_sam3_backend(monkeypatch, tmp_path):
     service = MaskingService(runtime_root=tmp_path)
     sentinel = object()
 
-    monkeypatch.setattr(service, "_build_sam2_controller", lambda: sentinel)
+    monkeypatch.setattr(service, "_build_sam3_controller", lambda: sentinel)
 
     assert service._get_controller() is sentinel
+
+
+def test_sam3_mask_controller_selects_highest_scoring_mask_and_renders_preview():
+    image = np.zeros((6, 6, 3), dtype=np.uint8)
+    image[..., 2] = 64
+    points = np.array([[1, 1], [4, 4]], dtype=np.int32)
+    labels = np.array([1, 0], dtype=np.int32)
+
+    class FakeInteractivePredictor:
+        def __init__(self):
+            self.calls = []
+
+        def set_image(self, image_value):
+            self.calls.append(("set_image", image_value.shape))
+
+        def predict(self, point_coords, point_labels, multimask_output):
+            self.calls.append(
+                ("predict", point_coords.copy(), point_labels.copy(), multimask_output)
+            )
+            masks = np.zeros((3, 6, 6), dtype=np.uint8)
+            masks[2, 1:4, 1:4] = 1
+            scores = np.array([0.1, 0.5, 0.95], dtype=np.float32)
+            logits = np.zeros((3, 6, 6), dtype=np.float32)
+            return masks, scores, logits
+
+    controller = Sam3MaskController(FakeInteractivePredictor())
+
+    mask, scores, preview = controller.first_frame_click(
+        image=image,
+        points=points,
+        labels=labels,
+        multimask=True,
+    )
+
+    assert mask.shape == (6, 6)
+    assert mask.dtype == np.uint8
+    assert mask[2, 2] == 1
+    assert float(scores[2]) == pytest.approx(0.95)
+    assert preview.size == (6, 6)
 
 
 def test_sam2_mask_controller_selects_highest_scoring_mask_and_renders_preview():

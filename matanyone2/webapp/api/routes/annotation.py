@@ -8,6 +8,7 @@ from matanyone2.webapp.api.dependencies import (
     get_draft_store,
     get_masking_service,
     get_repository,
+    get_video_service,
 )
 
 
@@ -31,6 +32,9 @@ class DraftTargetUpdatePayload(BaseModel):
     visible: bool | None = None
     locked: bool | None = None
     refine_preset: str | None = None
+    preset_strength: float | None = None
+    motion_strength: float | None = None
+    temporal_stability: float | None = None
 
 
 class DraftStagePayload(BaseModel):
@@ -41,6 +45,10 @@ class DraftBrushPayload(BaseModel):
     mode: str
     radius: int
     points: list[tuple[int, int]]
+
+
+class DraftTemplateFramePayload(BaseModel):
+    frame_index: int
 
 
 router = APIRouter()
@@ -88,6 +96,9 @@ def _target_payload(target, session):
         "visible": target.visible,
         "locked": target.locked,
         "refine_preset": target.refine_preset,
+        "preset_strength": target.preset_strength,
+        "motion_strength": target.motion_strength,
+        "temporal_stability": target.temporal_stability,
         "saved_mask_name": target.saved_mask_name,
         "selected": target.target_id == session.active_target_id,
     }
@@ -127,6 +138,9 @@ def _workbench_payload(session, draft_id: str):
         ),
         "can_submit": bool(session.selected_mask_names),
         "active_target_id": session.active_target_id,
+        "template_frame_index": session.draft.template_frame_index,
+        "frame_count": session.draft.frame_count,
+        "can_change_template_frame": session.stage != "preview",
         "template_frame_url": f"/api/drafts/{draft_id}/template-frame",
         "current_mask_url": (
             f"/api/drafts/{draft_id}/current-mask"
@@ -200,9 +214,32 @@ def update_target(
             visible=payload.visible,
             locked=payload.locked,
             refine_preset=payload.refine_preset,
+            preset_strength=payload.preset_strength,
+            motion_strength=payload.motion_strength,
+            temporal_stability=payload.temporal_stability,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"target not found: {target_id}") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _workbench_payload(session, draft_id)
+
+
+@router.post("/api/drafts/{draft_id}/template-frame")
+def set_template_frame(
+    draft_id: str,
+    payload: DraftTemplateFramePayload,
+    draft_store=Depends(get_draft_store),
+    masking_service=Depends(get_masking_service),
+    video_service=Depends(get_video_service),
+):
+    session = _require_session(draft_store, draft_id)
+    try:
+        video_service.select_template_frame(session.draft, payload.frame_index)
+        masking_service.reset_session_for_template_frame(
+            session,
+            frame_index=payload.frame_index,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _workbench_payload(session, draft_id)
@@ -342,6 +379,35 @@ def submit_draft(
                 "selected_masks": payload.selected_masks,
                 "selected_mask_presets": {
                     mask_name: session.saved_mask_presets.get(mask_name, "balanced")
+                    for mask_name in payload.selected_masks
+                },
+                "selected_mask_controls": {
+                    mask_name: {
+                        "preset_strength": next(
+                            (
+                                target.preset_strength
+                                for target in session.targets.values()
+                                if target.saved_mask_name == mask_name
+                            ),
+                            0.5,
+                        ),
+                        "motion_strength": next(
+                            (
+                                target.motion_strength
+                                for target in session.targets.values()
+                                if target.saved_mask_name == mask_name
+                            ),
+                            0.35,
+                        ),
+                        "temporal_stability": next(
+                            (
+                                target.temporal_stability
+                                for target in session.targets.values()
+                                if target.saved_mask_name == mask_name
+                            ),
+                            0.0,
+                        ),
+                    }
                     for mask_name in payload.selected_masks
                 },
             }

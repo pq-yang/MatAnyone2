@@ -191,6 +191,59 @@ def test_target_update_round_trip(
     )
 
 
+def test_target_update_round_trip_includes_numeric_refine_controls(
+    app_client: TestClient,
+    sample_video_upload,
+):
+    upload_response = app_client.post(
+        "/api/uploads",
+        files={"video": sample_video_upload},
+    )
+    draft_id = upload_response.json()["draft_id"]
+
+    update_response = app_client.patch(
+        f"/api/drafts/{draft_id}/targets/target-001",
+        json={
+            "refine_preset": "hair",
+            "preset_strength": 0.85,
+            "motion_strength": 0.55,
+            "temporal_stability": 0.7,
+        },
+    )
+
+    assert update_response.status_code == 200
+    payload = update_response.json()
+    active_target = next(
+        target for target in payload["targets"] if target["target_id"] == payload["active_target_id"]
+    )
+    assert active_target["preset_strength"] == 0.85
+    assert active_target["motion_strength"] == 0.55
+    assert active_target["temporal_stability"] == 0.7
+
+
+def test_template_frame_selection_round_trip(
+    app_client: TestClient,
+    sample_video_upload,
+):
+    upload_response = app_client.post(
+        "/api/uploads",
+        files={"video": sample_video_upload},
+    )
+    draft_id = upload_response.json()["draft_id"]
+
+    initial_state = app_client.get(f"/api/drafts/{draft_id}").json()
+    update_response = app_client.post(
+        f"/api/drafts/{draft_id}/template-frame",
+        json={"frame_index": 2},
+    )
+
+    assert initial_state["template_frame_index"] == 0
+    assert initial_state["frame_count"] == 3
+    assert update_response.status_code == 200
+    assert update_response.json()["template_frame_index"] == 2
+    assert update_response.json()["template_frame_url"] == f"/api/drafts/{draft_id}/template-frame"
+
+
 def test_target_preset_change_rebuilds_current_mask_preview(
     app_client: TestClient,
     sample_video_upload,

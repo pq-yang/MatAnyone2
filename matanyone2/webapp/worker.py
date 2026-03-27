@@ -1,5 +1,6 @@
 from pathlib import Path
 import time
+import json
 
 from matanyone2.webapp.models import JobStatus
 from matanyone2.webapp.queue import QueueCoordinator
@@ -42,6 +43,22 @@ class WorkerLoop:
         try:
             self.repository.update_status(job.job_id, JobStatus.PREPARING)
             self.repository.update_status(job.job_id, JobStatus.RUNNING)
+            job_params = json.loads(job.params_json or "{}")
+            selected_mask_controls = job_params.get("selected_mask_controls", {})
+            motion_strength = max(
+                (
+                    float(control.get("motion_strength", 0.0))
+                    for control in selected_mask_controls.values()
+                ),
+                default=0.0,
+            )
+            temporal_stability = max(
+                (
+                    float(control.get("temporal_stability", 0.0))
+                    for control in selected_mask_controls.values()
+                ),
+                default=0.0,
+            )
             inference_result = self.inference_service.run_job(
                 source_video_path=Path(job.source_video_path),
                 mask_path=Path(job.mask_path),
@@ -53,6 +70,8 @@ class WorkerLoop:
                 inference_result.foreground_video_path,
                 inference_result.alpha_video_path,
                 job_dir,
+                motion_strength=motion_strength,
+                temporal_stability=temporal_stability,
             )
         except Exception as exc:
             self.repository.update_status(

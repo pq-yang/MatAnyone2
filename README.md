@@ -92,6 +92,8 @@ py -3.10 -m venv .venv
 python -m pip install --upgrade pip
 python -m pip install torch==2.7.0 torchvision==0.22.0 torchaudio==2.7.0 --index-url https://download.pytorch.org/whl/cu128
 python -m pip install -e .
+python -m pip install decord
+python -m pip install -e D:\my_app\lens_hunter2\models\sam3\sam3_repo --no-deps
 ```
 
 The gradio demo keeps its extra dependencies in [`hugging_face/requirements.txt`](./hugging_face/requirements.txt), so install those separately only when you need the demo UI.
@@ -169,24 +171,27 @@ Current outputs:
 
 ### Annotation Workbench
 
-The current workbench is a single-page desktop UI built around `SAM2.1 -> first-frame mask -> MatAnyone2 video matting`.
+The current workbench is a single-page desktop UI built around `SAM3 -> key-frame mask -> MatAnyone2 bidirectional video matting`.
 
 Workbench capabilities:
 
 - multi-target layer management
+- arbitrary template-frame selection before annotation
 - `Positive / Negative` point placement
 - `Balanced / Hair / Edge / Motion` refine presets
 - `Add / Remove / Feather` brush cleanup
+- numeric `Preset strength / Motion softness / Temporal stability` controls
 - `Source / Overlay / Mask` review modes
 - export-mask selection before queue submission
 
-The internal web app now uses `SAM2.1` as the default first-frame interactive segmentation backend for the annotation workbench, while `MatAnyone2` remains the video matting backend after submission. You can still override the segmentation backend or checkpoint at launch time:
+The internal web app now uses local `SAM3` as the default interactive segmentation backend for the annotation workbench, while `MatAnyone2` remains the video matting backend after submission. When the selected template frame is not frame `0`, the worker now splits inference into forward and backward passes from that frame and stitches the result before export. You can still override the segmentation backend or checkpoint at launch time:
 
 ```powershell
+$env:MATANYONE2_WEBAPP_SAM_BACKEND = "sam3"
+$env:MATANYONE2_WEBAPP_SAM3_CHECKPOINT_PATH = "D:\my_app\lens_hunter2\models\sam3\checkpoints\sam3.pt"
+# fallback: switch back to SAM2 if needed
 $env:MATANYONE2_WEBAPP_SAM_BACKEND = "sam2"
 $env:MATANYONE2_WEBAPP_SAM2_VARIANT = "sam2.1_hiera_large"
-# optional: point to an existing local checkpoint instead of downloading into pretrained_models
-$env:MATANYONE2_WEBAPP_SAM2_CHECKPOINT_PATH = "D:\models\sam2.1_hiera_large.pt"
 ```
 
 ### Start For Testing
@@ -225,10 +230,12 @@ python scripts/run_internal_worker.py
 ### Quick Test Path
 
 1. Upload a short clip.
-2. Use positive and negative clicks to isolate the person.
-3. Switch the preset to `Hair`, `Edge`, `Motion`, or `Balanced` based on the edge you care about.
-4. Use `Add / Remove / Feather` to manually correct the first-frame mask.
-5. Save one or more targets, choose which saved masks to export, and submit the job.
+2. Choose the best template frame for segmentation.
+3. Use positive and negative clicks to isolate the person.
+4. Switch the preset to `Hair`, `Edge`, `Motion`, or `Balanced` based on the edge you care about.
+5. Tune `Preset strength`, `Motion softness`, and `Temporal stability`.
+6. Use `Add / Remove / Feather` to manually correct the key-frame mask.
+7. Save one or more targets, choose which saved masks to export, and submit the job.
 6. Review `Overlay / Alpha / Foreground` on the result page before downloading artifacts.
 
 ### Smoke Test

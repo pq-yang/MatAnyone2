@@ -400,7 +400,7 @@ button {
 
 .workbench-shell {
   display: grid;
-  grid-template-columns: minmax(21rem, 24rem) minmax(0, 1fr) minmax(18rem, 20rem);
+  grid-template-columns: minmax(24rem, 28rem) minmax(0, 1fr);
   gap: var(--space-6);
   align-items: start;
 }
@@ -419,6 +419,8 @@ button {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
+  max-height: calc(100dvh - (var(--space-8) * 2));
+  overflow: auto;
 }
 
 .workbench-sidebar {
@@ -569,8 +571,12 @@ button {
 
 .stage-switcher {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: auto repeat(3, minmax(0, 1fr)) auto;
   gap: var(--space-3);
+}
+
+.stage-switcher .tool-button {
+  min-height: 3rem;
 }
 
 .canvas-stage {

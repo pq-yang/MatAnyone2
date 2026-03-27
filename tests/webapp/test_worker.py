@@ -34,7 +34,7 @@ def test_process_next_job_completes_with_warning_when_export_warns(tmp_path):
         source_video_path="a.mp4",
         template_frame_index=0,
         mask_path="a.png",
-        params_json="{}",
+        params_json='{"selected_mask_controls": {"mask_001": {"motion_strength": 0.6, "temporal_stability": 0.8}}}',
     )
 
     class FakeInferenceService:
@@ -53,7 +53,17 @@ def test_process_next_job_completes_with_warning_when_export_warns(tmp_path):
             )()
 
     class FakeExportService:
-        def export_assets(self, foreground_video_path, alpha_video_path, job_dir):
+        def export_assets(
+            self,
+            foreground_video_path,
+            alpha_video_path,
+            job_dir,
+            *,
+            motion_strength,
+            temporal_stability,
+        ):
+            assert motion_strength == 0.6
+            assert temporal_stability == 0.8
             rgba_dir = Path(job_dir) / "rgba_png"
             rgba_dir.mkdir(parents=True, exist_ok=True)
             zip_path = Path(job_dir) / "rgba_png.zip"

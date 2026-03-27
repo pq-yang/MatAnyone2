@@ -30,6 +30,7 @@ def create_app(settings=None) -> FastAPI:
         sam_model_type=settings.sam_model_type,
         sam2_variant=settings.sam2_variant,
         sam2_checkpoint_path=settings.sam2_checkpoint_path,
+        sam3_checkpoint_path=settings.sam3_checkpoint_path,
     )
     app.state.drafts = {}
     app.state.templates = Jinja2Templates(directory="matanyone2/webapp/templates")

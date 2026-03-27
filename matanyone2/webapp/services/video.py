@@ -60,6 +60,7 @@ class VideoDraftService:
             fps=fps,
             frame_count=frame_count,
             duration_seconds=duration_seconds,
+            template_frame_index=0,
         )
 
     def create_draft_from_upload(self, upload_file: UploadFile) -> DraftRecord:
@@ -67,3 +68,26 @@ class VideoDraftService:
         upload_path = uploads_dir / upload_file.filename
         upload_path.write_bytes(upload_file.file.read())
         return self.create_draft(upload_path)
+
+    def select_template_frame(self, draft: DraftRecord, frame_index: int) -> DraftRecord:
+        if frame_index < 0 or frame_index >= draft.frame_count:
+            raise ValueError("frame index is out of range")
+        frame = self._read_frame(draft.video_path, frame_index)
+        template_frame_path = draft.template_frame_path.parent / "template_frame.png"
+        if not cv2.imwrite(str(template_frame_path), frame):
+            raise ValueError("unable to write template frame")
+        draft.template_frame_path = template_frame_path
+        draft.template_frame_index = frame_index
+        return draft
+
+    @staticmethod
+    def _read_frame(video_path: Path, frame_index: int):
+        capture = cv2.VideoCapture(str(video_path))
+        try:
+            capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+            ok, frame = capture.read()
+        finally:
+            capture.release()
+        if not ok:
+            raise ValueError("unable to read requested frame")
+        return frame

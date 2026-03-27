@@ -7,6 +7,7 @@
   class="workbench-shell"
   data-draft-id="{{ draft_id }}"
   data-template-frame-url="{{ template_frame_url }}"
+  data-template-frame-endpoint="/api/drafts/{{ draft_id }}/template-frame"
   data-workbench-endpoint="/api/drafts/{{ draft_id }}"
   data-targets-endpoint="/api/drafts/{{ draft_id }}/targets"
   data-stage-endpoint="/api/drafts/{{ draft_id }}/stage"
@@ -49,6 +50,40 @@
       </div>
       <p id="target-summary" class="panel-note">
         Pick one person, save that layer, then move to the next target.
+      </p>
+    </section>
+
+    <section id="layer-panel" class="workflow-section">
+      <div class="workflow-section__header">
+        <div>
+          <p class="panel__eyebrow">Layer Stack</p>
+          <h2 class="workflow-section__title">Targets overview</h2>
+        </div>
+      </div>
+      <div id="target-list" class="target-list"></div>
+    </section>
+
+    <section id="keyframe-controls" class="workflow-section">
+      <div class="workflow-section__header">
+        <div>
+          <p class="panel__eyebrow">Key Frame</p>
+          <h2 class="workflow-section__title">Segmentation anchor</h2>
+        </div>
+        <button id="apply-template-frame" class="tool-button tool-button--compact" type="button">
+          Apply Frame
+        </button>
+      </div>
+      <div class="slider-stack">
+        <label class="workflow-field" for="template-frame-slider">
+          <span class="workflow-field__label">
+            Frame
+            <output id="template-frame-value" for="template-frame-slider">0</output>
+          </span>
+          <input id="template-frame-slider" type="range" min="0" max="{{ draft.frame_count - 1 }}" value="{{ draft.template_frame_index }}">
+        </label>
+      </div>
+      <p class="panel-note">
+        Pick the frame where the silhouette reads best. The queued job will propagate from that frame forward and backward before stitching the result.
       </p>
     </section>
 
@@ -135,6 +170,27 @@
         </div>
       </div>
       <div class="slider-stack">
+        <label class="workflow-field" for="preset-strength">
+          <span class="workflow-field__label">
+            Preset strength
+            <output id="preset-strength-value" for="preset-strength">50%</output>
+          </span>
+          <input id="preset-strength" type="range" min="0" max="100" value="50">
+        </label>
+        <label class="workflow-field" for="motion-strength">
+          <span class="workflow-field__label">
+            Motion softness
+            <output id="motion-strength-value" for="motion-strength">35%</output>
+          </span>
+          <input id="motion-strength" type="range" min="0" max="100" value="35">
+        </label>
+        <label class="workflow-field" for="temporal-stability">
+          <span class="workflow-field__label">
+            Temporal stability
+            <output id="temporal-stability-value" for="temporal-stability">0%</output>
+          </span>
+          <input id="temporal-stability" type="range" min="0" max="100" value="0">
+        </label>
         <label class="workflow-field" for="brush-radius">
           <span class="workflow-field__label">
             Brush size
@@ -155,7 +211,7 @@
     <section id="export-selection-panel" class="workflow-section">
       <div class="workflow-section__header">
         <div>
-          <p class="panel__eyebrow">Export Selection</p>
+          <p class="panel__eyebrow">Commit</p>
           <h2 class="workflow-section__title">Targets to include</h2>
         </div>
       </div>
@@ -170,6 +226,44 @@
       <p class="panel-note">
         Only checked saved masks will be merged and sent into MatAnyone2.
       </p>
+    </section>
+
+    <section id="inspector-panel" class="workflow-section">
+      <div class="workflow-section__header">
+        <div>
+          <p class="panel__eyebrow">Inspector</p>
+          <h2 class="workflow-section__title">Current context</h2>
+        </div>
+      </div>
+      <dl class="meta-list meta-list--stacked">
+        <div>
+          <dt>Stage</dt>
+          <dd id="inspector-stage">coarse</dd>
+        </div>
+        <div>
+          <dt>Active Target</dt>
+          <dd id="inspector-target">Target 1</dd>
+        </div>
+        <div>
+          <dt>Preset</dt>
+          <dd id="inspector-preset">Balanced</dd>
+        </div>
+        <div>
+          <dt>Current Points</dt>
+          <dd id="inspector-points">0</dd>
+        </div>
+        <div>
+          <dt>Saved Mask</dt>
+          <dd id="inspector-mask">Not saved yet</dd>
+        </div>
+      </dl>
+      <div class="guidance-card">
+        <p class="panel__eyebrow">Stage Guidance</p>
+        <h3 id="stage-guidance-title" class="guidance-card__title">Coarse Selection</h3>
+        <p id="stage-guidance-copy" class="panel-note">
+          Use positive and negative points to establish the subject first. Move to refinement once the silhouette is roughly correct.
+        </p>
+      </div>
     </section>
   </aside>
 
@@ -186,9 +280,11 @@
     </header>
 
     <div class="stage-switcher panel">
+      <button id="stage-back" class="tool-button tool-button--ghost" type="button">Back Stage</button>
       <button class="stage-button" type="button" data-stage="coarse">1. Coarse Selection</button>
       <button class="stage-button" type="button" data-stage="refine">2. Edge Refinement</button>
       <button class="stage-button" type="button" data-stage="preview">3. Preview</button>
+      <button id="stage-forward" class="tool-button" type="button">Next Stage</button>
     </div>
 
     <section id="canvas-stage" class="panel canvas-stage">
@@ -224,52 +320,6 @@
       <p id="annotator-status" class="status-text" aria-live="polite"></p>
     </section>
   </section>
-
-  <aside class="workbench-sidebar">
-    <section id="layer-panel" class="panel sidebar-panel">
-      <div class="panel__header">
-        <p class="panel__eyebrow">Layer Stack</p>
-        <h2 class="panel__title">Targets overview</h2>
-      </div>
-      <div id="target-list" class="target-list"></div>
-    </section>
-
-    <section id="inspector-panel" class="panel sidebar-panel">
-      <div class="panel__header">
-        <p class="panel__eyebrow">Inspector</p>
-        <h2 class="panel__title">Current context</h2>
-      </div>
-      <dl class="meta-list meta-list--stacked">
-        <div>
-          <dt>Stage</dt>
-          <dd id="inspector-stage">coarse</dd>
-        </div>
-        <div>
-          <dt>Active Target</dt>
-          <dd id="inspector-target">Target 1</dd>
-        </div>
-        <div>
-          <dt>Preset</dt>
-          <dd id="inspector-preset">Balanced</dd>
-        </div>
-        <div>
-          <dt>Current Points</dt>
-          <dd id="inspector-points">0</dd>
-        </div>
-        <div>
-          <dt>Saved Mask</dt>
-          <dd id="inspector-mask">Not saved yet</dd>
-        </div>
-      </dl>
-      <div class="guidance-card">
-        <p class="panel__eyebrow">Stage Guidance</p>
-        <h3 id="stage-guidance-title" class="guidance-card__title">Coarse Selection</h3>
-        <p id="stage-guidance-copy" class="panel-note">
-          Use positive and negative points to establish the subject first. Move to refinement once the silhouette is roughly correct.
-        </p>
-      </div>
-    </section>
-  </aside>
 </section>
 {% endblock %}
 {% block scripts %}

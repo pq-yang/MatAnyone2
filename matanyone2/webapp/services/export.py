@@ -25,6 +25,9 @@ class ExportService:
         foreground_video_path: Path,
         alpha_video_path: Path,
         job_dir: Path,
+        *,
+        motion_strength: float = 0.0,
+        temporal_stability: float = 0.0,
     ) -> ExportResult:
         foreground_frames, alpha_frames, fps = self._extract_frames(
             foreground_video_path,
@@ -35,6 +38,8 @@ class ExportService:
             foreground_frames,
             alpha_frames,
             job_dir,
+            motion_strength=motion_strength,
+            temporal_stability=temporal_stability,
         )
         png_zip_path = self._zip_directory(rgba_png_dir, job_dir / "rgba_png.zip")
 
@@ -105,15 +110,13 @@ class ExportService:
         foreground_frames: list[Path],
         alpha_frames: list[Path],
         job_dir: Path,
+        *,
+        motion_strength: float,
+        temporal_stability: float,
     ) -> Path:
         rgba_dir = ensure_dir(job_dir / "rgba_png")
-        for index, (foreground_path, alpha_path) in enumerate(
-            zip(foreground_frames, alpha_frames, strict=True)
-        ):
-            foreground_rgb = cv2.cvtColor(
-                cv2.imread(str(foreground_path), cv2.IMREAD_COLOR),
-                cv2.COLOR_BGR2RGB,
-            )
+        processed_alpha_frames = []
+        for alpha_path in alpha_frames:
             alpha_image = cv2.imread(str(alpha_path), cv2.IMREAD_UNCHANGED)
             if alpha_image is None:
                 raise RuntimeError(f"unable to read alpha frame: {alpha_path}")
@@ -121,9 +124,62 @@ class ExportService:
                 alpha_gray = cv2.cvtColor(alpha_image, cv2.COLOR_BGR2GRAY)
             else:
                 alpha_gray = alpha_image
+            processed_alpha_frames.append(
+                self._apply_motion_softness(alpha_gray, motion_strength=motion_strength)
+            )
+
+        processed_alpha_frames = self._stabilize_alpha_frames(
+            processed_alpha_frames,
+            temporal_stability=temporal_stability,
+        )
+        for index, (foreground_path, alpha_path) in enumerate(
+            zip(foreground_frames, alpha_frames, strict=True)
+        ):
+            foreground_rgb = cv2.cvtColor(
+                cv2.imread(str(foreground_path), cv2.IMREAD_COLOR),
+                cv2.COLOR_BGR2RGB,
+            )
+            alpha_gray = processed_alpha_frames[index]
+            cv2.imwrite(str(alpha_path), alpha_gray)
             rgba_frame = compose_rgba_frame(foreground_rgb, alpha_gray)
             rgba_frame.save(rgba_dir / f"{index:04d}.png")
         return rgba_dir
+
+    def _apply_motion_softness(
+        self,
+        alpha_frame: np.ndarray,
+        *,
+        motion_strength: float,
+    ) -> np.ndarray:
+        if motion_strength <= 0:
+            return alpha_frame.astype(np.uint8)
+        radius = max(1, int(round(1 + (motion_strength * 4))))
+        kernel_size = radius if radius % 2 == 1 else radius + 1
+        blurred = cv2.GaussianBlur(alpha_frame, (kernel_size, kernel_size), sigmaX=0)
+        return blurred.astype(np.uint8)
+
+    def _stabilize_alpha_frames(
+        self,
+        alpha_frames: list[np.ndarray],
+        *,
+        temporal_stability: float,
+    ) -> list[np.ndarray]:
+        if temporal_stability <= 0 or len(alpha_frames) <= 1:
+            return [frame.astype(np.uint8) for frame in alpha_frames]
+
+        stabilized = [alpha_frames[0].astype(np.uint8)]
+        blended_previous = alpha_frames[0].astype(np.float32)
+        for current in alpha_frames[1:]:
+            blended = cv2.addWeighted(
+                current.astype(np.float32),
+                1.0 - temporal_stability,
+                blended_previous,
+                temporal_stability,
+                0.0,
+            )
+            stabilized.append(np.clip(blended, 0, 255).astype(np.uint8))
+            blended_previous = blended
+        return stabilized
 
     def _zip_directory(self, source_dir: Path, zip_path: Path) -> Path:
         with zipfile.ZipFile(zip_path, "w") as archive:
