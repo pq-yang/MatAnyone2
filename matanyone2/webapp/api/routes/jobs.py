@@ -95,12 +95,21 @@ def _build_job_summary(job) -> dict[str, object]:
     if not isinstance(selected_mask_presets, dict):
         selected_mask_presets = {}
 
+    process_start_frame_index = params.get("process_start_frame_index")
+    process_end_frame_index = params.get("process_end_frame_index")
+    process_range_duration_seconds = params.get("process_range_duration_seconds")
+    source_fps = params.get("source_fps")
+
     return {
         "source_name": Path(job.source_video_path).name,
         "template_frame_index": params.get(
             "template_frame_index",
             job.template_frame_index,
         ),
+        "process_start_frame_index": process_start_frame_index,
+        "process_end_frame_index": process_end_frame_index,
+        "process_range_duration_seconds": process_range_duration_seconds,
+        "source_fps": source_fps,
         "selected_mask_count": len(selected_masks),
         "selected_masks": selected_masks,
         "selected_mask_presets": selected_mask_presets,
@@ -194,6 +203,7 @@ def get_job_status(
 def get_source_video(
     job_id: str,
     repository=Depends(get_repository),
+    settings=Depends(get_settings),
     video_service=Depends(get_video_service),
 ):
     try:
@@ -201,18 +211,58 @@ def get_source_video(
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="job not found") from exc
 
+    params = _parse_job_params(job.params_json)
+    job_dir = Path(settings.runtime_root) / "jobs" / job.job_id
     source_path = Path(job.source_video_path)
     if not source_path.exists() or not source_path.is_file():
         raise HTTPException(status_code=404, detail="source video not found")
+
+    processing_range_start = params.get("process_start_frame_index")
+    processing_range_end = params.get("process_end_frame_index")
+    clip_source_path = source_path
     preview_path = None
-    try:
-        preview_path = video_service.ensure_browser_preview(
-            source_path,
-            preview_path=source_path.parent / "preview_source.mp4",
-        )
-    except RuntimeError:
-        preview_path = None
-    serving_path = preview_path or source_path
+
+    if (
+        isinstance(processing_range_start, int)
+        and isinstance(processing_range_end, int)
+        and processing_range_start >= 0
+        and processing_range_end >= processing_range_start
+    ):
+        clip_candidate = job_dir / "processing_range.mp4"
+        if clip_candidate.exists() and clip_candidate.is_file():
+            clip_source_path = clip_candidate
+        else:
+            try:
+                clip_source_path, _ = video_service.write_processing_range_clip(
+                    source_path,
+                    start_frame_index=processing_range_start,
+                    end_frame_index=processing_range_end,
+                    output_path=clip_candidate,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        preview_candidate = job_dir / "preview_source.mp4"
+        if preview_candidate.exists() and preview_candidate.is_file():
+            preview_path = preview_candidate
+        else:
+            try:
+                preview_path = video_service.ensure_browser_preview(
+                    clip_source_path,
+                    preview_path=preview_candidate,
+                )
+            except RuntimeError:
+                preview_path = None
+    else:
+        try:
+            preview_path = video_service.ensure_browser_preview(
+                source_path,
+                preview_path=source_path.parent / "preview_source.mp4",
+            )
+        except RuntimeError:
+            preview_path = None
+
+    serving_path = preview_path or clip_source_path
     return FileResponse(
         path=serving_path,
         filename=serving_path.name,

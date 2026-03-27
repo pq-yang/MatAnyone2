@@ -64,6 +64,8 @@ class WorkerLoop:
                 mask_path=Path(job.mask_path),
                 job_dir=job_dir,
                 template_frame_index=job.template_frame_index,
+                process_start_frame_index=int(job_params.get("process_start_frame_index", 0)),
+                process_end_frame_index=job_params.get("process_end_frame_index"),
             )
             self.repository.update_status(job.job_id, JobStatus.EXPORTING)
             export_result = self.export_service.export_assets(

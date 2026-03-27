@@ -35,6 +35,11 @@ def test_annotation_page_renders_workbench_layout(
     assert 'id="export-selection-panel"' in response.text
     assert 'id="canvas-stage"' in response.text
     assert 'id="canvas-keyframe-panel"' in response.text
+    assert 'id="processing-range-panel"' in response.text
+    assert 'id="processing-range-start"' in response.text
+    assert 'id="processing-range-end"' in response.text
+    assert 'id="apply-processing-range"' in response.text
+    assert 'id="anchor-frame-panel"' in response.text
     assert 'id="layer-panel"' in response.text
     assert 'id="inspector-panel"' in response.text
     assert 'id="canvas-view-tabs"' in response.text

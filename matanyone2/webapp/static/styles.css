@@ -603,6 +603,22 @@ button {
   background: rgba(255, 255, 255, 0.025);
 }
 
+.timeline-control-group {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: calc(var(--radius-lg) - 4px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.timeline-range-grid,
+.timeline-timecode-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
 .canvas-keyframe-panel__header {
   display: flex;
   align-items: flex-start;
@@ -1181,6 +1197,8 @@ button {
   }
 
   .keyframe-selection-summary,
+  .timeline-range-grid,
+  .timeline-timecode-grid,
   .preview-compare-strip {
     grid-template-columns: 1fr;
   }

@@ -15,6 +15,8 @@ def test_create_draft_extracts_template_frame_and_metadata(tmp_path, sample_vide
     assert draft.template_frame_path.exists()
     assert draft.duration_seconds <= 10
     assert draft.template_frame_index == 0
+    assert draft.process_start_frame_index == 0
+    assert draft.process_end_frame_index == draft.frame_count - 1
 
 
 def test_create_draft_records_browser_preview_path(tmp_path, sample_video_path, monkeypatch):

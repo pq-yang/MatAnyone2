@@ -70,6 +70,8 @@ class VideoDraftService:
             fps=fps,
             frame_count=frame_count,
             duration_seconds=duration_seconds,
+            process_start_frame_index=0,
+            process_end_frame_index=frame_count - 1,
             template_frame_index=0,
         )
 
@@ -82,12 +84,32 @@ class VideoDraftService:
     def select_template_frame(self, draft: DraftRecord, frame_index: int) -> DraftRecord:
         if frame_index < 0 or frame_index >= draft.frame_count:
             raise ValueError("frame index is out of range")
+        if not (draft.process_start_frame_index <= frame_index <= draft.process_end_frame_index):
+            raise ValueError("template frame must fall inside the processing range")
         frame = self._read_frame(draft.video_path, frame_index)
         template_frame_path = draft.template_frame_path.parent / "template_frame.png"
         if not cv2.imwrite(str(template_frame_path), frame):
             raise ValueError("unable to write template frame")
         draft.template_frame_path = template_frame_path
         draft.template_frame_index = frame_index
+        return draft
+
+    def select_processing_range(
+        self,
+        draft: DraftRecord,
+        *,
+        start_frame_index: int,
+        end_frame_index: int,
+    ) -> DraftRecord:
+        if start_frame_index < 0 or end_frame_index < 0:
+            raise ValueError("processing range cannot be negative")
+        if start_frame_index > end_frame_index:
+            raise ValueError("processing range start must be before the end")
+        if end_frame_index >= draft.frame_count:
+            raise ValueError("processing range is out of range")
+        draft.process_start_frame_index = start_frame_index
+        draft.process_end_frame_index = end_frame_index
+        draft.template_frame_index = None
         return draft
 
     def ensure_browser_preview(
@@ -122,6 +144,41 @@ class VideoDraftService:
         if not preview_path.exists():
             raise RuntimeError("ffmpeg did not produce browser preview output")
         return preview_path
+
+    def write_processing_range_clip(
+        self,
+        video_path: Path,
+        *,
+        start_frame_index: int,
+        end_frame_index: int,
+        output_path: Path,
+    ) -> tuple[Path, float]:
+        capture = cv2.VideoCapture(str(video_path))
+        fps = float(capture.get(cv2.CAP_PROP_FPS) or 0.0)
+        width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+        height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        writer = cv2.VideoWriter(
+            str(output_path),
+            cv2.VideoWriter_fourcc(*"mp4v"),
+            fps if fps > 0 else 24.0,
+            (width, height),
+        )
+        frames_written = 0
+        try:
+            capture.set(cv2.CAP_PROP_POS_FRAMES, start_frame_index)
+            for _ in range(start_frame_index, end_frame_index + 1):
+                ok, frame = capture.read()
+                if not ok:
+                    break
+                writer.write(frame)
+                frames_written += 1
+        finally:
+            writer.release()
+            capture.release()
+        if frames_written == 0:
+            raise ValueError("unable to extract the requested processing range")
+        return output_path, fps if fps > 0 else 24.0
 
     @staticmethod
     def _read_frame(video_path: Path, frame_index: int):

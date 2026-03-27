@@ -53,7 +53,12 @@ def test_submit_flow_returns_job_page(
 
     annotate_response = app_client.post(
         f"/api/drafts/{draft_id}/submit",
-        json={"template_frame_index": 0, "selected_masks": ["mask_001"]},
+        json={
+            "process_start_frame_index": 0,
+            "process_end_frame_index": 2,
+            "template_frame_index": 0,
+            "selected_masks": ["mask_001"],
+        },
     )
 
     assert annotate_response.status_code == 200
@@ -81,7 +86,12 @@ def test_submit_persists_selected_mask_presets_in_job_params(
     app_client.post(f"/api/drafts/{draft_id}/masks")
     submit_response = app_client.post(
         f"/api/drafts/{draft_id}/submit",
-        json={"template_frame_index": 0, "selected_masks": ["mask_001"]},
+        json={
+            "process_start_frame_index": 0,
+            "process_end_frame_index": 2,
+            "template_frame_index": 0,
+            "selected_masks": ["mask_001"],
+        },
     )
 
     repository = app_client.app.state.repository
@@ -262,8 +272,109 @@ def test_workbench_exposes_source_video_scrubber_contract(
     assert payload["source_video_url"] == f"/api/drafts/{draft_id}/source-video"
     assert payload["fps"] == 3.0
     assert payload["duration_seconds"] == 1.0
+    assert payload["process_start_frame_index"] == 0
+    assert payload["process_end_frame_index"] == 2
+    assert payload["can_apply_range"] is True
+    assert payload["can_apply_template_frame"] is True
     assert video_response.status_code == 200
     assert video_response.headers["content-type"].startswith("video/")
+
+
+def test_processing_range_update_clears_existing_anchor_and_masks(
+    app_client: TestClient,
+    sample_video_upload,
+):
+    upload_response = app_client.post(
+        "/api/uploads",
+        files={"video": sample_video_upload},
+    )
+    draft_id = upload_response.json()["draft_id"]
+
+    app_client.post(
+        f"/api/drafts/{draft_id}/click",
+        json={"x": 1, "y": 1, "positive": True},
+    )
+    app_client.post(f"/api/drafts/{draft_id}/masks")
+
+    response = app_client.post(
+        f"/api/drafts/{draft_id}/processing-range",
+        json={"start_frame_index": 1, "end_frame_index": 2},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["process_start_frame_index"] == 1
+    assert payload["process_end_frame_index"] == 2
+    assert payload["template_frame_index"] is None
+    assert payload["mask_names"] == []
+    assert payload["selected_mask_names"] == []
+    assert payload["current_mask_url"] is None
+    assert payload["current_preview_url"] is None
+    assert payload["stage"] == "coarse"
+    assert payload["can_apply_clicks"] is False
+    assert payload["can_submit"] is False
+    assert payload["can_apply_template_frame"] is True
+
+
+def test_template_frame_must_fall_inside_processing_range(
+    app_client: TestClient,
+    sample_video_upload,
+):
+    upload_response = app_client.post(
+        "/api/uploads",
+        files={"video": sample_video_upload},
+    )
+    draft_id = upload_response.json()["draft_id"]
+    app_client.post(
+        f"/api/drafts/{draft_id}/processing-range",
+        json={"start_frame_index": 1, "end_frame_index": 2},
+    )
+
+    response = app_client.post(
+        f"/api/drafts/{draft_id}/template-frame",
+        json={"frame_index": 0},
+    )
+
+    assert response.status_code == 400
+    assert "processing range" in response.json()["detail"]
+
+
+def test_submit_requires_anchor_inside_processing_range(
+    app_client: TestClient,
+    sample_video_upload,
+):
+    upload_response = app_client.post(
+        "/api/uploads",
+        files={"video": sample_video_upload},
+    )
+    draft_id = upload_response.json()["draft_id"]
+
+    app_client.post(
+        f"/api/drafts/{draft_id}/processing-range",
+        json={"start_frame_index": 1, "end_frame_index": 2},
+    )
+    app_client.post(
+        f"/api/drafts/{draft_id}/template-frame",
+        json={"frame_index": 1},
+    )
+    app_client.post(
+        f"/api/drafts/{draft_id}/click",
+        json={"x": 1, "y": 1, "positive": True},
+    )
+    app_client.post(f"/api/drafts/{draft_id}/masks")
+
+    response = app_client.post(
+        f"/api/drafts/{draft_id}/submit",
+        json={
+            "process_start_frame_index": 1,
+            "process_end_frame_index": 2,
+            "template_frame_index": 0,
+            "selected_masks": ["mask_001"],
+        },
+    )
+
+    assert response.status_code == 400
+    assert "processing range" in response.json()["detail"]
 
 
 def test_draft_source_video_endpoint_prefers_browser_preview(app_client: TestClient, sample_video_upload):
@@ -614,6 +725,34 @@ def test_job_source_video_endpoint_prefers_browser_preview_when_present(app_clie
     assert response.content == b"preview-video-bytes"
 
 
+def test_job_source_video_endpoint_prefers_processing_range_preview_when_present(app_client):
+    runtime_root = app_client.app.state.settings.runtime_root
+    source_dir = runtime_root / "jobs" / "source-range-preview"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    source_path = source_dir / "source.mp4"
+    source_preview_path = source_dir / "preview_source.mp4"
+    source_path.write_bytes(b"video-bytes")
+    source_preview_path.write_bytes(b"full-preview-bytes")
+
+    repository = app_client.app.state.repository
+    job = repository.create_job(
+        source_video_path=str(source_path),
+        template_frame_index=1,
+        mask_path="queued.png",
+        params_json='{"process_start_frame_index": 1, "process_end_frame_index": 2}',
+    )
+
+    job_dir = runtime_root / "jobs" / job.job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+    (job_dir / "processing_range.mp4").write_bytes(b"clip-bytes")
+    (job_dir / "preview_source.mp4").write_bytes(b"range-preview-bytes")
+
+    response = app_client.get(f"/api/jobs/{job.job_id}/source-video")
+
+    assert response.status_code == 200
+    assert response.content == b"range-preview-bytes"
+
+
 def test_missing_job_page_returns_404(app_client: TestClient):
     with TestClient(app_client.app, raise_server_exceptions=False) as client:
         response = client.get("/jobs/missing-job")
@@ -697,7 +836,7 @@ def test_job_status_exposes_review_summary_and_artifact_metadata(app_client):
         source_video_path=str(source_path),
         template_frame_index=12,
         mask_path="hero_mask.png",
-        params_json='{"template_frame_index": 12, "selected_masks": ["mask_001", "mask_002"], "selected_mask_presets": {"mask_001": "hair"}}',
+        params_json='{"process_start_frame_index": 10, "process_end_frame_index": 20, "process_range_duration_seconds": 0.46, "template_frame_index": 12, "selected_masks": ["mask_001", "mask_002"], "selected_mask_presets": {"mask_001": "hair"}}',
     )
     repository.update_status(
         job.job_id,
@@ -718,6 +857,9 @@ def test_job_status_exposes_review_summary_and_artifact_metadata(app_client):
     assert payload["status_label"] == "Completed with warning"
     assert payload["job_summary"]["source_name"] == "hero.mp4"
     assert payload["job_summary"]["template_frame_index"] == 12
+    assert payload["job_summary"]["process_start_frame_index"] == 10
+    assert payload["job_summary"]["process_end_frame_index"] == 20
+    assert payload["job_summary"]["process_range_duration_seconds"] == 0.46
     assert payload["job_summary"]["selected_mask_count"] == 2
     assert payload["job_summary"]["selected_masks"] == ["mask_001", "mask_002"]
     assert payload["job_summary"]["selected_mask_presets"] == {"mask_001": "hair"}

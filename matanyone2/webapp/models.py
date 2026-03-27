@@ -42,7 +42,9 @@ class DraftRecord:
     fps: float
     frame_count: int
     duration_seconds: float
-    template_frame_index: int = 0
+    process_start_frame_index: int = 0
+    process_end_frame_index: int = 0
+    template_frame_index: int | None = 0
     browser_preview_path: Path | None = None
 
 

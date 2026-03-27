@@ -20,6 +20,8 @@ class DraftClickPayload(BaseModel):
 
 
 class DraftSubmitPayload(BaseModel):
+    process_start_frame_index: int
+    process_end_frame_index: int
     template_frame_index: int
     selected_masks: list[str]
 
@@ -50,6 +52,11 @@ class DraftBrushPayload(BaseModel):
 
 class DraftTemplateFramePayload(BaseModel):
     frame_index: int
+
+
+class DraftProcessingRangePayload(BaseModel):
+    start_frame_index: int
+    end_frame_index: int
 
 
 router = APIRouter()
@@ -118,27 +125,33 @@ def _workbench_payload(session, draft_id: str):
     stage_meta = STAGE_PRESENTATION[session.stage]
     active_target = session.active_target
     target_locked = active_target.locked
+    has_template_frame = session.draft.template_frame_index is not None
     return {
         "draft_id": draft_id,
         "stage": session.stage,
         "stage_label": stage_meta["stage_label"],
         "canvas_mode_label": stage_meta["canvas_mode_label"],
         "stage_note": stage_meta["stage_note"],
-        "can_apply_clicks": session.stage != "preview" and not target_locked,
+        "can_apply_clicks": session.stage != "preview" and not target_locked and has_template_frame,
         "can_create_target": session.stage != "preview",
         "can_save_current_target": (
             session.stage != "preview"
             and session.current_mask_path is not None
             and not target_locked
+            and has_template_frame
         ),
         "can_undo_clicks": (
-            session.stage != "preview" and not target_locked and len(session.click_points) > 0
+            session.stage != "preview" and not target_locked and len(session.click_points) > 0 and has_template_frame
         ),
         "can_reset_target": (
-            session.stage != "preview" and not target_locked and len(session.click_points) > 0
+            session.stage != "preview" and not target_locked and len(session.click_points) > 0 and has_template_frame
         ),
-        "can_submit": bool(session.selected_mask_names),
+        "can_submit": bool(session.selected_mask_names) and has_template_frame,
+        "can_apply_range": True,
+        "can_apply_template_frame": True,
         "active_target_id": session.active_target_id,
+        "process_start_frame_index": session.draft.process_start_frame_index,
+        "process_end_frame_index": session.draft.process_end_frame_index,
         "template_frame_index": session.draft.template_frame_index,
         "frame_count": session.draft.frame_count,
         "fps": session.draft.fps,
@@ -249,6 +262,27 @@ def set_template_frame(
     return _workbench_payload(session, draft_id)
 
 
+@router.post("/api/drafts/{draft_id}/processing-range")
+def set_processing_range(
+    draft_id: str,
+    payload: DraftProcessingRangePayload,
+    draft_store=Depends(get_draft_store),
+    masking_service=Depends(get_masking_service),
+    video_service=Depends(get_video_service),
+):
+    session = _require_session(draft_store, draft_id)
+    try:
+        video_service.select_processing_range(
+            session.draft,
+            start_frame_index=payload.start_frame_index,
+            end_frame_index=payload.end_frame_index,
+        )
+        masking_service.reset_session_for_processing_range(session)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _workbench_payload(session, draft_id)
+
+
 @router.post("/api/drafts/{draft_id}/stage")
 def set_stage(
     draft_id: str,
@@ -272,12 +306,15 @@ def apply_click(
     masking_service=Depends(get_masking_service),
 ):
     session = _require_session(draft_store, draft_id)
-    result = masking_service.apply_click(
-        session,
-        x=payload.x,
-        y=payload.y,
-        positive=payload.positive,
-    )
+    try:
+        result = masking_service.apply_click(
+            session,
+            x=payload.x,
+            y=payload.y,
+            positive=payload.positive,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     response = _workbench_payload(session, draft_id)
     response.update(
         {
@@ -366,6 +403,20 @@ def submit_draft(
     repository=Depends(get_repository),
 ):
     session = _require_session(draft_store, draft_id)
+    if payload.process_start_frame_index != session.draft.process_start_frame_index:
+        raise HTTPException(status_code=400, detail="submitted processing range does not match the current draft")
+    if payload.process_end_frame_index != session.draft.process_end_frame_index:
+        raise HTTPException(status_code=400, detail="submitted processing range does not match the current draft")
+    if session.draft.template_frame_index is None:
+        raise HTTPException(status_code=400, detail="apply a template frame inside the processing range before submitting")
+    if payload.template_frame_index != session.draft.template_frame_index:
+        raise HTTPException(status_code=400, detail="submitted template frame does not match the current processing range")
+    if not (
+        session.draft.process_start_frame_index
+        <= payload.template_frame_index
+        <= session.draft.process_end_frame_index
+    ):
+        raise HTTPException(status_code=400, detail="template frame must fall inside the processing range")
     try:
         mask_path = masking_service.write_merged_mask(session, payload.selected_masks)
     except ValueError as exc:
@@ -380,6 +431,13 @@ def submit_draft(
         params_json=json.dumps(
             {
                 "template_frame_index": payload.template_frame_index,
+                "process_start_frame_index": payload.process_start_frame_index,
+                "process_end_frame_index": payload.process_end_frame_index,
+                "process_range_duration_seconds": (
+                    (payload.process_end_frame_index - payload.process_start_frame_index + 1)
+                    / max(session.draft.fps, 1.0)
+                ),
+                "source_fps": session.draft.fps,
                 "selected_masks": payload.selected_masks,
                 "selected_mask_presets": {
                     mask_name: session.saved_mask_presets.get(mask_name, "balanced")

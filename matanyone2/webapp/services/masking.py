@@ -307,6 +307,8 @@ class MaskingService:
         y: int,
         positive: bool,
     ) -> MaskingResult:
+        if session.draft.template_frame_index is None:
+            raise ValueError("apply a template frame inside the processing range before editing")
         session.click_points = session.click_points + [(x, y)]
         session.click_labels = session.click_labels + [1 if positive else 0]
         return self._render_active_target(session)
@@ -319,6 +321,8 @@ class MaskingService:
         mode: str,
         radius: int,
     ) -> MaskingResult:
+        if session.draft.template_frame_index is None:
+            raise ValueError("apply a template frame inside the processing range before editing")
         if session.stage == "preview":
             raise ValueError("preview mode is read-only")
         if session.active_target.locked:
@@ -463,6 +467,18 @@ class MaskingService:
         session.stage = "coarse"
         session._target_sequence = 0
         session.draft.template_frame_index = frame_index
+        self._clear_current_render(session)
+        session.create_target()
+
+    def reset_session_for_processing_range(self, session: DraftSession) -> None:
+        session.targets = {}
+        session.active_target_id = None
+        session.saved_masks = {}
+        session.saved_mask_presets = {}
+        session.selected_mask_names = set()
+        session.stage = "coarse"
+        session._target_sequence = 0
+        session.draft.template_frame_index = None
         self._clear_current_render(session)
         session.create_target()
 

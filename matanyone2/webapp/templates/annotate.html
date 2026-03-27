@@ -8,6 +8,7 @@
   data-draft-id="{{ draft_id }}"
   data-template-frame-url="{{ template_frame_url }}"
   data-template-frame-endpoint="/api/drafts/{{ draft_id }}/template-frame"
+  data-processing-range-endpoint="/api/drafts/{{ draft_id }}/processing-range"
   data-workbench-endpoint="/api/drafts/{{ draft_id }}"
   data-targets-endpoint="/api/drafts/{{ draft_id }}/targets"
   data-stage-endpoint="/api/drafts/{{ draft_id }}/stage"
@@ -289,6 +290,7 @@
           class="canvas-media canvas-media--video"
           src="/api/drafts/{{ draft_id }}/source-video"
           preload="metadata"
+          controls
           muted
           playsinline
           hidden
@@ -301,31 +303,99 @@
         >
       </div>
 
-      <section id="canvas-keyframe-panel" class="canvas-keyframe-panel" aria-label="Key frame timeline">
-        <div class="canvas-keyframe-panel__header">
-          <div>
-            <p class="panel__eyebrow">Key Frame</p>
-            <h3 class="panel__title">Segmentation anchor</h3>
+      <section id="canvas-keyframe-panel" class="canvas-keyframe-panel" aria-label="Timeline controls">
+        <section id="processing-range-panel" class="timeline-control-group" aria-label="Processing range">
+          <div class="canvas-keyframe-panel__header">
+            <div>
+              <p class="panel__eyebrow">Processing Range</p>
+              <h3 class="panel__title">Define the processing clip</h3>
+            </div>
+            <button id="apply-processing-range" class="tool-button tool-button--compact" type="button">
+              Apply Range
+            </button>
           </div>
-          <button id="apply-template-frame" class="tool-button tool-button--compact" type="button">
-            Apply Frame
-          </button>
-        </div>
-        <label class="workflow-field" for="template-frame-slider">
-          <span class="workflow-field__label">
-            Anchor frame
-            <output id="template-frame-value" for="template-frame-slider">0</output>
-          </span>
-          <input id="template-frame-slider" type="range" min="0" max="{{ draft.frame_count - 1 }}" value="{{ draft.template_frame_index }}">
-        </label>
-        <div id="keyframe-selection-summary" class="keyframe-selection-summary">
-          <span id="keyframe-selected-label">Selected frame 0</span>
-          <span id="keyframe-applied-label">Applied frame {{ draft.template_frame_index }}</span>
-          <span id="keyframe-time-label">00:00 / 00:00</span>
-        </div>
-        <p class="panel-note">
-          直接在上方主画布视频里选一帧作为抠像起点。提交后会从这帧向前和向后分别推理，再拼接完整结果。
-        </p>
+
+          <div class="timeline-range-grid">
+            <label class="workflow-field" for="processing-range-start">
+              <span class="workflow-field__label">
+                In frame
+                <output id="processing-range-start-value" for="processing-range-start">{{ draft.process_start_frame_index }}</output>
+              </span>
+              <input id="processing-range-start" type="range" min="0" max="{{ draft.frame_count - 1 }}" value="{{ draft.process_start_frame_index }}">
+            </label>
+
+            <label class="workflow-field" for="processing-range-end">
+              <span class="workflow-field__label">
+                Out frame
+                <output id="processing-range-end-value" for="processing-range-end">{{ draft.process_end_frame_index }}</output>
+              </span>
+              <input id="processing-range-end" type="range" min="0" max="{{ draft.frame_count - 1 }}" value="{{ draft.process_end_frame_index }}">
+            </label>
+          </div>
+
+          <div class="timeline-timecode-grid">
+            <label class="workflow-field" for="processing-range-start-timecode">
+              <span class="workflow-field__label">In timecode</span>
+              <input id="processing-range-start-timecode" class="workflow-input" type="text" value="00:00.00" inputmode="numeric">
+            </label>
+
+            <label class="workflow-field" for="processing-range-end-timecode">
+              <span class="workflow-field__label">Out timecode</span>
+              <input id="processing-range-end-timecode" class="workflow-input" type="text" value="00:00.00" inputmode="numeric">
+            </label>
+          </div>
+
+          <div id="processing-range-summary" class="keyframe-selection-summary">
+            <span id="range-selected-label">Selected range {{ draft.process_start_frame_index }} - {{ draft.process_end_frame_index }}</span>
+            <span id="range-applied-label">Applied range {{ draft.process_start_frame_index }} - {{ draft.process_end_frame_index }}</span>
+            <span id="range-time-label">00:00.00 / 00:00.00</span>
+          </div>
+
+          <p class="panel-note">
+            Pick one continuous interval to process. Applying a new range clears saved masks and requires a new anchor frame.
+          </p>
+        </section>
+
+        <section id="anchor-frame-panel" class="timeline-control-group" aria-label="Anchor frame">
+          <div class="canvas-keyframe-panel__header">
+            <div>
+              <p class="panel__eyebrow">Anchor Frame</p>
+              <h3 class="panel__title">Choose the segmentation anchor</h3>
+            </div>
+            <button id="apply-template-frame" class="tool-button tool-button--compact" type="button">
+              Apply Frame
+            </button>
+          </div>
+
+          <label class="workflow-field" for="template-frame-slider">
+            <span class="workflow-field__label">
+              Anchor frame
+              <output id="template-frame-value" for="template-frame-slider">0</output>
+            </span>
+            <input
+              id="template-frame-slider"
+              type="range"
+              min="{{ draft.process_start_frame_index }}"
+              max="{{ draft.process_end_frame_index }}"
+              value="{{ draft.template_frame_index if draft.template_frame_index is not none else draft.process_start_frame_index }}"
+            >
+          </label>
+
+          <label class="workflow-field" for="template-frame-timecode">
+            <span class="workflow-field__label">Anchor timecode</span>
+            <input id="template-frame-timecode" class="workflow-input" type="text" value="00:00.00" inputmode="numeric">
+          </label>
+
+          <div id="keyframe-selection-summary" class="keyframe-selection-summary">
+            <span id="keyframe-selected-label">Selected frame 0</span>
+            <span id="keyframe-applied-label">Applied frame {{ draft.template_frame_index if draft.template_frame_index is not none else "Not set" }}</span>
+            <span id="keyframe-time-label">00:00.00 / 00:00.00</span>
+          </div>
+
+          <p class="panel-note">
+            The anchor must live inside the applied processing range. MatAnyone2 uses it as the center frame for forward and backward propagation.
+          </p>
+        </section>
       </section>
 
       <section id="preview-compare-strip" class="preview-compare-strip" aria-label="Live preview comparison">

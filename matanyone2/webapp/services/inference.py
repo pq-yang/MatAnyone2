@@ -17,28 +17,67 @@ class InferenceService:
         mask_path: Path,
         job_dir: Path,
         template_frame_index: int,
+        process_start_frame_index: int = 0,
+        process_end_frame_index: int | None = None,
     ) -> InferenceResult:
         source_video_path = Path(source_video_path)
         mask_path = Path(mask_path)
         job_dir = Path(job_dir)
-        if template_frame_index > 0:
+        clip_source_video_path, relative_anchor_frame_index, _ = self._prepare_processing_clip(
+            source_video_path=source_video_path,
+            job_dir=job_dir,
+            process_start_frame_index=process_start_frame_index,
+            process_end_frame_index=process_end_frame_index,
+            template_frame_index=template_frame_index,
+        )
+        if relative_anchor_frame_index > 0:
             foreground_path, alpha_path = self._run_bidirectional_job(
-                source_video_path=source_video_path,
+                source_video_path=clip_source_video_path,
                 mask_path=mask_path,
                 job_dir=job_dir,
-                template_frame_index=template_frame_index,
+                template_frame_index=relative_anchor_frame_index,
             )
         else:
             foreground_path, alpha_path = self._run_model(
-                source_video_path=source_video_path,
+                source_video_path=clip_source_video_path,
                 mask_path=mask_path,
                 job_dir=job_dir,
-                template_frame_index=template_frame_index,
+                template_frame_index=relative_anchor_frame_index,
             )
         return InferenceResult(
             foreground_video_path=foreground_path,
             alpha_video_path=alpha_path,
         )
+
+    def _prepare_processing_clip(
+        self,
+        *,
+        source_video_path: Path,
+        job_dir: Path,
+        process_start_frame_index: int,
+        process_end_frame_index: int | None,
+        template_frame_index: int,
+    ) -> tuple[Path, int, float | None]:
+        if process_end_frame_index is None and process_start_frame_index == 0:
+            return source_video_path, template_frame_index, None
+
+        frames, fps = self._read_video_frames(source_video_path)
+        if not frames:
+            raise RuntimeError("source video has no readable frames")
+
+        resolved_end = process_end_frame_index if process_end_frame_index is not None else len(frames) - 1
+        if process_start_frame_index < 0 or process_start_frame_index > resolved_end:
+            raise ValueError("processing range start must be before the end")
+        if resolved_end >= len(frames):
+            raise ValueError("processing range is out of range for source video")
+        if not (process_start_frame_index <= template_frame_index <= resolved_end):
+            raise ValueError("template frame must fall inside the processing range")
+
+        clipped_frames = frames[process_start_frame_index : resolved_end + 1]
+        clip_path = job_dir / "processing_range.mp4"
+        self._write_video_frames(clipped_frames, clip_path, fps=fps)
+        relative_anchor = template_frame_index - process_start_frame_index
+        return clip_path, relative_anchor, fps
 
     def _run_bidirectional_job(
         self,

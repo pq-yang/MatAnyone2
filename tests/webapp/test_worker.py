@@ -34,11 +34,13 @@ def test_process_next_job_completes_with_warning_when_export_warns(tmp_path):
         source_video_path="a.mp4",
         template_frame_index=0,
         mask_path="a.png",
-        params_json='{"selected_mask_controls": {"mask_001": {"motion_strength": 0.6, "temporal_stability": 0.8}}}',
+        params_json='{"process_start_frame_index": 3, "process_end_frame_index": 9, "selected_mask_controls": {"mask_001": {"motion_strength": 0.6, "temporal_stability": 0.8}}}',
     )
 
     class FakeInferenceService:
-        def run_job(self, *, source_video_path, mask_path, job_dir, template_frame_index):
+        def run_job(self, *, source_video_path, mask_path, job_dir, template_frame_index, process_start_frame_index, process_end_frame_index):
+            assert process_start_frame_index == 3
+            assert process_end_frame_index == 9
             foreground = Path(job_dir) / "foreground.mp4"
             alpha = Path(job_dir) / "alpha.mp4"
             foreground.write_bytes(b"fg")

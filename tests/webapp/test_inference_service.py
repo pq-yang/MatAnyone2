@@ -21,6 +21,8 @@ def test_run_job_writes_foreground_and_alpha_outputs(tmp_path, monkeypatch):
         mask_path=Path("mask.png"),
         job_dir=job_dir,
         template_frame_index=0,
+        process_start_frame_index=0,
+        process_end_frame_index=None,
     )
 
     assert result.foreground_video_path.name == "foreground.mp4"
@@ -47,9 +49,46 @@ def test_run_job_dispatches_bidirectional_flow_for_nonzero_template_frame_index(
         mask_path=Path("mask.png"),
         job_dir=job_dir,
         template_frame_index=12,
+        process_start_frame_index=0,
+        process_end_frame_index=None,
     )
 
     assert observed["template_frame_index"] == 12
+    assert result.foreground_video_path.name == "foreground.mp4"
+
+
+def test_run_job_uses_processing_range_clip_and_relative_anchor(tmp_path, monkeypatch):
+    service = InferenceService(model_name="MatAnyone 2")
+    job_dir = tmp_path / "job-1"
+    job_dir.mkdir()
+    observed = {}
+
+    def fake_prepare_processing_clip(**kwargs):
+        observed["clip_request"] = kwargs
+        clip_path = job_dir / "processing_range.mp4"
+        clip_path.write_bytes(b"clip")
+        return clip_path, 1, 3.0
+
+    def fake_bidirectional(**kwargs):
+        observed["bidirectional"] = kwargs
+        return Path(job_dir / "foreground.mp4"), Path(job_dir / "alpha.mp4")
+
+    monkeypatch.setattr(service, "_prepare_processing_clip", fake_prepare_processing_clip, raising=False)
+    monkeypatch.setattr(service, "_run_bidirectional_job", fake_bidirectional, raising=False)
+
+    result = service.run_job(
+        source_video_path=Path("input.mp4"),
+        mask_path=Path("mask.png"),
+        job_dir=job_dir,
+        template_frame_index=3,
+        process_start_frame_index=2,
+        process_end_frame_index=4,
+    )
+
+    assert observed["clip_request"]["process_start_frame_index"] == 2
+    assert observed["clip_request"]["process_end_frame_index"] == 4
+    assert observed["bidirectional"]["source_video_path"] == job_dir / "processing_range.mp4"
+    assert observed["bidirectional"]["template_frame_index"] == 1
     assert result.foreground_video_path.name == "foreground.mp4"
 
 

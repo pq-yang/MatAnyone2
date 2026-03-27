@@ -1,4 +1,5 @@
 import {
+  formatDuration,
   parseJson,
   setStatus,
   withCacheBust,
@@ -89,10 +90,27 @@ function bindResultsPage() {
 
     const presetMap = summary.selected_mask_presets || {};
     const presetEntries = Object.entries(presetMap);
+    const startFrame = summary.process_start_frame_index;
+    const endFrame = summary.process_end_frame_index;
+    const rangeDuration = summary.process_range_duration_seconds;
+    const sourceFps = Number(summary.source_fps || 0);
+    const hasRange = Number.isInteger(startFrame) && Number.isInteger(endFrame);
+
+    let processRangeLabel = null;
+    if (hasRange) {
+      if (Number.isFinite(sourceFps) && sourceFps > 0) {
+        processRangeLabel = `Frame ${startFrame}-${endFrame} | ${formatDuration(startFrame / sourceFps)} - ${formatDuration(endFrame / sourceFps)}`;
+      } else {
+        processRangeLabel = `Frame ${startFrame}-${endFrame}`;
+      }
+    }
+
     const rows = [
       ["Source", summary.source_name || "Unknown source"],
       ["Status", payload.status_label || payload.status],
+      ...(processRangeLabel ? [["Process range", processRangeLabel]] : []),
       ["Template frame", `Frame ${summary.template_frame_index ?? 0}`],
+      ...(rangeDuration ? [["Processed duration", formatDuration(rangeDuration)]] : []),
       [
         "Selected targets",
         summary.selected_mask_count
