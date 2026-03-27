@@ -109,3 +109,26 @@ def test_anchor_must_fall_inside_processing_range(tmp_path: Path):
     assert state.template_frame_index == 3
     assert state.workflow_step == "mask"
     assert state.can_enter_mask is True
+
+
+def test_ensure_anchor_for_masking_defaults_to_processing_range_start(tmp_path: Path):
+    config = DesktopAppConfig.for_root(tmp_path)
+    runtime_root = tmp_path / "runtime"
+    controller = DesktopWorkbenchController(
+        config=config,
+        video_service=VideoDraftService(
+            runtime_root=runtime_root,
+            max_video_seconds=config.max_video_seconds,
+            max_upload_bytes=config.max_upload_bytes,
+        ),
+        masking_service=_build_masking_service(runtime_root),
+    )
+    video_path = _create_sample_video(tmp_path / "sample.mp4")
+    controller.open_video(video_path)
+    controller.apply_processing_range(start_frame_index=2, end_frame_index=5)
+
+    state = controller.ensure_anchor_for_masking()
+
+    assert state.template_frame_index == 2
+    assert state.workflow_step == "mask"
+    assert state.can_enter_mask is True

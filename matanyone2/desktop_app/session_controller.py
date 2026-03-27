@@ -90,6 +90,15 @@ class DesktopWorkbenchController:
         self.session.active_sidebar_tab = "targets"
         return self.current_state()
 
+    def ensure_anchor_for_masking(self) -> DesktopSessionState:
+        if self.draft.template_frame_index is None:
+            frame_index = self.draft.process_start_frame_index
+            self.video_service.select_template_frame(self.draft, frame_index)
+            self.masking_service.reset_session_for_template_frame(self.session, frame_index=frame_index)
+        self.session.workflow_step = "mask"
+        self.session.active_sidebar_tab = "targets"
+        return self.current_state()
+
     def create_target(self, name: str | None = None) -> DesktopSessionState:
         self.masking_service.create_target(self.session, name=name)
         return self.current_state()

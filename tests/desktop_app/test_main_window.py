@@ -1,8 +1,14 @@
 from pathlib import Path
 
+import cv2
+import numpy as np
+from PIL import Image
+
 from matanyone2.desktop_app.config import DesktopAppConfig
 from matanyone2.desktop_app.main_window import DesktopWorkbenchWindow
-from matanyone2.desktop_app.session_controller import DesktopSessionState
+from matanyone2.desktop_app.session_controller import DesktopSessionState, DesktopWorkbenchController
+from matanyone2.webapp.services.masking import MaskingService
+from matanyone2.webapp.services.video import VideoDraftService
 
 
 def _state() -> DesktopSessionState:
@@ -30,6 +36,49 @@ def _state_for_step(step: str, *, sidebar_tab: str = "targets") -> DesktopSessio
     state.workflow_step = step
     state.active_sidebar_tab = sidebar_tab
     return state
+
+
+def _create_sample_video(video_path: Path, *, frame_count: int = 8) -> Path:
+    writer = cv2.VideoWriter(
+        str(video_path),
+        cv2.VideoWriter_fourcc(*"mp4v"),
+        4.0,
+        (16, 12),
+    )
+    for idx in range(frame_count):
+        frame = np.full((12, 16, 3), fill_value=idx * 20, dtype=np.uint8)
+        writer.write(frame)
+    writer.release()
+    return video_path
+
+
+def _build_masking_service(runtime_root: Path) -> MaskingService:
+    class FakeController:
+        def first_frame_click(self, image, points, labels, multimask=True):
+            mask = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
+            for x, y in points.tolist():
+                x0 = max(0, x - 1)
+                y0 = max(0, y - 1)
+                x1 = min(image.shape[1], x + 2)
+                y1 = min(image.shape[0], y + 2)
+                mask[y0:y1, x0:x1] = 1
+            return mask, np.zeros_like(mask, dtype=np.float32), Image.fromarray(image)
+
+    return MaskingService(runtime_root=runtime_root, controller_factory=lambda: FakeController())
+
+
+def _build_controller(tmp_path: Path) -> DesktopWorkbenchController:
+    config = DesktopAppConfig.for_root(tmp_path)
+    runtime_root = tmp_path / "runtime"
+    return DesktopWorkbenchController(
+        config=config,
+        video_service=VideoDraftService(
+            runtime_root=runtime_root,
+            max_video_seconds=config.max_video_seconds,
+            max_upload_bytes=config.max_upload_bytes,
+        ),
+        masking_service=_build_masking_service(runtime_root),
+    )
 
 
 def test_main_window_uses_single_monitor_workspace(qapp, tmp_path: Path):
@@ -152,3 +201,20 @@ def test_clip_hint_switches_when_range_is_trimmed(qapp, tmp_path: Path):
     window._sync_interaction_hint()
 
     assert "trimmed range" in window.interaction_hint_label.text().lower()
+
+
+def test_select_subject_from_clip_uses_default_anchor(qapp, tmp_path: Path):
+    controller = _build_controller(tmp_path)
+    config = DesktopAppConfig.for_root(tmp_path)
+    video_path = _create_sample_video(tmp_path / "sample.mp4")
+    window = DesktopWorkbenchWindow(config=config, controller=controller)
+    window.load_video_file(video_path)
+    window.state = controller.apply_processing_range(start_frame_index=2, end_frame_index=5)
+    window.current_playhead_frame = 4
+    window._sync_state_to_ui()
+
+    window.select_subject_button.click()
+
+    assert window.state.workflow_step == "mask"
+    assert window.state.template_frame_index == 2
+    assert window.current_playhead_frame == 2

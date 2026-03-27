@@ -323,7 +323,7 @@ class DesktopWorkbenchWindow(QMainWindow):
         for key, button in self.view_buttons.items():
             button.clicked.connect(lambda _checked=False, mode=key: self._set_view_mode(mode))
         for mode, button in self.interaction_toolbar_buttons.items():
-            button.clicked.connect(lambda _checked=False, value=mode: self._set_interaction_mode(value))
+            button.clicked.connect(lambda _checked=False, value=mode: self._on_toolbar_interaction_selected(value))
 
     def load_video_file(self, video_path: str | Path) -> None:
         if self.controller is None:
@@ -423,6 +423,7 @@ class DesktopWorkbenchWindow(QMainWindow):
 
     def _sync_action_states(self) -> None:
         can_edit = self.controller is not None and self.state.can_enter_mask and self.state.workflow_step != "review"
+        can_begin_selection = self.controller is not None and self.state.workflow_step != "review"
         self.save_target_button.setEnabled(can_edit and self.state.current_mask_path is not None)
         self.submit_job_button.setEnabled(bool(self.state.selected_mask_names))
         self.view_buttons["alpha"].setEnabled(self.state.workflow_step == "review")
@@ -432,10 +433,12 @@ class DesktopWorkbenchWindow(QMainWindow):
             (self.state.workflow_step in {"mask", "refine"} and self.state.current_preview_path is not None)
             or self.state.workflow_step == "review"
         )
-        for button in self.interaction_toolbar_buttons.values():
+        self.select_subject_button.setEnabled(can_begin_selection)
+        self.exclude_button.setEnabled(can_begin_selection)
+        for button in (self.brush_add_button, self.brush_remove_button, self.brush_feather_button):
             button.setEnabled(can_edit)
         self.interaction_mode.setEnabled(can_edit)
-        self.interaction_hint_label.setVisible(can_edit)
+        self.interaction_hint_label.setVisible(can_begin_selection)
 
     def _preferred_sidebar_tab(self) -> str:
         if self.state.workflow_step == "review":
@@ -600,6 +603,14 @@ class DesktopWorkbenchWindow(QMainWindow):
     def _on_monitor_clicked(self, x: int, y: int) -> None:
         if self.controller is None or self.state.workflow_step == "review":
             return
+        if self.state.workflow_step == "clip":
+            self.state = self.controller.ensure_anchor_for_masking()
+            self.current_playhead_frame = int(
+                self.state.template_frame_index
+                if self.state.template_frame_index is not None
+                else self.state.process_start_frame_index
+            )
+            self._sync_state_to_ui()
         if self.current_interaction_mode == "positive":
             self.controller.apply_click(x=x, y=y, positive=True)
         elif self.current_interaction_mode == "negative":
@@ -611,6 +622,14 @@ class DesktopWorkbenchWindow(QMainWindow):
     def _on_monitor_stroke(self, points: list[tuple[int, int]]) -> None:
         if self.controller is None or self.state.workflow_step == "review":
             return
+        if self.state.workflow_step == "clip":
+            self.state = self.controller.ensure_anchor_for_masking()
+            self.current_playhead_frame = int(
+                self.state.template_frame_index
+                if self.state.template_frame_index is not None
+                else self.state.process_start_frame_index
+            )
+            self._sync_state_to_ui()
         mode_map = {
             "brush_add": "add",
             "brush_remove": "remove",
@@ -668,6 +687,18 @@ class DesktopWorkbenchWindow(QMainWindow):
             "Brush Feather": "brush_feather",
         }
         self._set_interaction_mode(mapping[text], sync_combo=False)
+
+    def _on_toolbar_interaction_selected(self, mode: str) -> None:
+        if self.controller is not None and self.state.workflow_step == "clip":
+            self.state = self.controller.ensure_anchor_for_masking()
+            self.current_playhead_frame = int(
+                self.state.template_frame_index
+                if self.state.template_frame_index is not None
+                else self.state.process_start_frame_index
+            )
+            self._sync_state_to_ui()
+            self._render_monitor()
+        self._set_interaction_mode(mode)
 
     def _set_interaction_mode(self, mode: str, *, sync_combo: bool = True) -> None:
         self.current_interaction_mode = mode
@@ -833,8 +864,8 @@ class DesktopWorkbenchWindow(QMainWindow):
 
     def _go_next(self) -> None:
         current = self.state.workflow_step
-        if current == "clip" and self.state.can_enter_mask and self.controller:
-            self.state = self.controller.set_workflow_step("mask")
+        if current == "clip" and self.controller:
+            self.state = self.controller.ensure_anchor_for_masking()
         elif current == "mask" and self.controller:
             self.state = self.controller.set_workflow_step("refine")
         elif current == "refine" and self.controller and self.state.latest_job_id:
@@ -852,7 +883,15 @@ class DesktopWorkbenchWindow(QMainWindow):
             self.stepper.setCurrentIndex({"clip": 0, "mask": 1, "refine": 2}.get(self.state.workflow_step, 0))
             self.stepper.blockSignals(False)
             return
-        self.state = self.controller.set_workflow_step(target_step)
+        if target_step == "mask" and self.state.workflow_step == "clip":
+            self.state = self.controller.ensure_anchor_for_masking()
+            self.current_playhead_frame = int(
+                self.state.template_frame_index
+                if self.state.template_frame_index is not None
+                else self.state.process_start_frame_index
+            )
+        else:
+            self.state = self.controller.set_workflow_step(target_step)
         self._sync_state_to_ui()
         self._render_monitor()
 
