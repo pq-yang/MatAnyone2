@@ -53,6 +53,7 @@ dependencies = [
   'imageio[ffmpeg]',
   'huggingface_hub == 0.36.2',
   'safetensors',
+  'PySide6 >= 6.8',
   'xlsxwriter',
   'kornia',
 ]
