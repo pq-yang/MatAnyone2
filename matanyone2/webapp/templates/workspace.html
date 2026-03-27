@@ -248,7 +248,6 @@
               <button class="canvas-view-tab" type="button" data-canvas-mode="alpha">Alpha</button>
               <button class="canvas-view-tab" type="button" data-canvas-mode="foreground">Foreground</button>
             </div>
-            <button id="compare-toggle" class="tool-button tool-button--compact" type="button">Compare</button>
           </div>
         </header>
 
@@ -311,17 +310,6 @@
             </span>
             <input id="anchor-frame-slider" type="range" min="{{ draft.process_start_frame_index }}" max="{{ draft.process_end_frame_index }}" value="{{ draft.template_frame_index if draft.template_frame_index is not none else draft.process_start_frame_index }}">
           </label>
-        </div>
-      </section>
-
-      <section id="compare-drawer" class="panel compare-drawer" hidden>
-        <div class="preview-compare-card">
-          <p class="panel__eyebrow">Before</p>
-          <img id="preview-before-image" src="/api/drafts/{{ draft_id }}/template-frame" alt="Previous preview state">
-        </div>
-        <div class="preview-compare-card">
-          <p class="panel__eyebrow">Live</p>
-          <img id="preview-live-image" src="/api/drafts/{{ draft_id }}/template-frame" alt="Current preview state">
         </div>
       </section>
     </section>

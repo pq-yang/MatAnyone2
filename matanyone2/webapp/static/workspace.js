@@ -105,10 +105,6 @@ function bindWorkbench() {
   const temporalStabilityValue = document.getElementById("temporal-stability-value");
   const edgeFeatherRadiusInput = document.getElementById("edge-feather-radius");
   const edgeFeatherRadiusValue = document.getElementById("edge-feather-radius-value");
-  const compareToggle = document.getElementById("compare-toggle");
-  const compareDrawer = document.getElementById("compare-drawer");
-  const previewBeforeImage = document.getElementById("preview-before-image");
-  const previewLiveImage = document.getElementById("preview-live-image");
   const reviewSidebar = document.getElementById("workspace-review-sidebar");
   const reviewSummaryList = document.getElementById("review-summary-list");
   const reviewSummaryListSide = document.getElementById("review-summary-list-side");
@@ -147,8 +143,6 @@ function bindWorkbench() {
     livePatchTimer: null,
     livePatchRevision: 0,
     lastAppliedLivePatchRevision: 0,
-    compareBeforeSrc: root.dataset.templateFrameUrl || "",
-    compareLiveSrc: root.dataset.templateFrameUrl || "",
     jobPollTimer: null,
     reviewPayload: null,
     reviewMode: "source",
@@ -269,19 +263,6 @@ function bindWorkbench() {
 
   function clampFrame(frameIndex, minFrame, maxFrame) {
     return Math.max(minFrame, Math.min(maxFrame, frameIndex));
-  }
-
-  function syncCompareStrip(payload = state.workbench) {
-    if (!previewBeforeImage || !previewLiveImage || !payload) {
-      return;
-    }
-    const liveSrc = image?.src || withCacheBust(resolveCanvasUrl(payload));
-    if (!state.compareBeforeSrc) {
-      state.compareBeforeSrc = liveSrc;
-    }
-    state.compareLiveSrc = liveSrc;
-    previewBeforeImage.src = state.compareBeforeSrc;
-    previewLiveImage.src = state.compareLiveSrc;
   }
 
   function cancelOverlayLoop() {
@@ -1009,8 +990,6 @@ function bindWorkbench() {
     sourcePlayheadSlider?.toggleAttribute("disabled", !payload.can_apply_range);
     templateFrameSlider?.toggleAttribute("disabled", !payload.can_change_template_frame || rangeDirty || rangePendingCompletion);
     toggleSourcePlaybackButton?.toggleAttribute("disabled", state.canvasMode !== "source");
-    compareToggle?.toggleAttribute("disabled", payload.workflow_step !== "review");
-
     const currentTarget = activeTarget(payload);
     toggleTargetLockButton?.toggleAttribute("disabled", !currentTarget);
     if (toggleTargetLockButton && currentTarget) {
@@ -1143,7 +1122,6 @@ function bindWorkbench() {
       state.templateFrameApplied !== (hasTemplateFrame(payload) ? Number(payload.template_frame_index) : null)
     );
     state.workbench = payload;
-    state.compareEnabled = Boolean(payload.compare_enabled);
     syncSelectedMasks(payload);
     if (rangeChangedOnServer || (!state.rangeSelectionTouchedStart && !state.rangeSelectionTouchedEnd)) {
       state.rangeSelectionStart = Number(payload.process_start_frame_index || 0);
@@ -1172,7 +1150,6 @@ function bindWorkbench() {
     syncTargetControls(payload);
 
     syncCanvasMode(payload);
-    syncCompareStrip(payload);
     syncPresetButtons(payload);
 
     if (canvasStageNote) {
@@ -1203,6 +1180,9 @@ function bindWorkbench() {
         ? "Brush refinement is disabled in preview mode."
         : "Brush actions edit the active mask directly, which is useful when SAM3 gets the rough silhouette but misses small edge corrections.";
     }
+    if (presetNote && payload.active_sidebar_tab === "refine") {
+      presetNote.textContent = `${PRESET_META[activePreset(payload)]?.note || PRESET_META.balanced.note} Every refine control updates the main monitor directly.`;
+    }
 
     if (inspectorStage) {
       inspectorStage.textContent = payload.workflow_step || payload.stage;
@@ -1223,12 +1203,6 @@ function bindWorkbench() {
       targetNameInput.disabled = false;
     }
     syncKeyframeSummary(payload);
-    if (compareDrawer) {
-      compareDrawer.hidden = !state.compareEnabled;
-    }
-    if (compareToggle) {
-      compareToggle.toggleAttribute("data-active", state.compareEnabled);
-    }
     if (targetSummary) {
       targetSummary.textContent = currentTarget
         ? `${currentTarget.name} is ${currentTarget.visible ? "visible" : "hidden"}, ${currentTarget.locked ? "locked" : "editable"}, and uses the ${PRESET_META[currentTarget.refine_preset]?.label || "Balanced"} preset.`
@@ -1299,14 +1273,6 @@ function bindWorkbench() {
     state.overlayOpacity = Number(overlayOpacityInput.value);
     updateRangeOutput(overlayOpacityValue, state.overlayOpacity);
     applyImagePresentation();
-  });
-
-  compareToggle?.addEventListener("click", () => {
-    state.compareEnabled = !state.compareEnabled;
-    if (compareDrawer) {
-      compareDrawer.hidden = !state.compareEnabled;
-    }
-    compareToggle.toggleAttribute("data-active", state.compareEnabled);
   });
 
   function seekVideoToFrame(frameIndex, payload = state.workbench) {
@@ -1612,7 +1578,6 @@ function bindWorkbench() {
       clearTimeout(state.livePatchTimer);
     }
 
-    const baselineSrc = image?.src || state.compareLiveSrc || withCacheBust(resolveCanvasUrl(state.workbench));
     state.livePatchTimer = window.setTimeout(async () => {
       const revision = ++state.livePatchRevision;
       setStatus(status, pendingMessage, false);
@@ -1622,7 +1587,6 @@ function bindWorkbench() {
           return;
         }
         state.lastAppliedLivePatchRevision = revision;
-        state.compareBeforeSrc = baselineSrc;
         renderWorkbench(payload);
         setStatus(status, successMessage(payload), false);
       } catch (error) {

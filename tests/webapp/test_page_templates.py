@@ -63,8 +63,6 @@ def test_annotation_page_renders_workbench_layout(
     assert 'id="timeline-duration-chip"' in response.text
     assert 'id="anchor-rail"' in response.text
     assert 'id="anchor-frame-slider"' in response.text
-    assert 'id="compare-toggle"' in response.text
-    assert 'id="compare-drawer"' in response.text
     assert 'id="undo-click"' in response.text
     assert 'id="reset-target"' in response.text
     assert 'id="brush-radius"' in response.text
@@ -82,6 +80,8 @@ def test_annotation_page_renders_workbench_layout(
     assert 'id="workspace-return-to-clip"' in response.text
     assert 'id="workspace-return-to-refine"' in response.text
     assert 'id="preview-compare-strip"' not in response.text
+    assert 'id="compare-toggle"' not in response.text
+    assert 'id="compare-drawer"' not in response.text
     assert 'id="keyframe-video"' not in response.text
     assert 'id="canvas-keyframe-panel"' not in response.text
     assert 'id="anchor-frame-panel"' not in response.text
