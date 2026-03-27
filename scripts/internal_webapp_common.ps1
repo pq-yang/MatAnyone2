@@ -11,7 +11,22 @@ function Get-InternalWebAppPythonPath {
         [string]$RepoRoot
     )
 
-    return [System.IO.Path]::GetFullPath((Join-Path $RepoRoot ".venv\Scripts\python.exe"))
+    $candidates = @(
+        [System.IO.Path]::GetFullPath((Join-Path $RepoRoot ".venv\Scripts\python.exe")),
+        [System.IO.Path]::GetFullPath((Join-Path $RepoRoot "..\internal-webapp-ui-rebuild\.venv\Scripts\python.exe"))
+    )
+
+    foreach ($candidate in $candidates) {
+        if (-not (Test-Path -LiteralPath $candidate)) {
+            continue
+        }
+        & $candidate -c "import fastapi, uvicorn, numpy, PIL" *> $null
+        if ($LASTEXITCODE -eq 0) {
+            return $candidate
+        }
+    }
+
+    return $candidates[0]
 }
 
 function Get-InternalWebAppServiceConfig {

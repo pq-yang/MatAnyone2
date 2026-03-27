@@ -9,3 +9,4 @@ data/
 .worktrees/
 runtime/
 .venv/
+tmp_debug/

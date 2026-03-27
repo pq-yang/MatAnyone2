@@ -257,6 +257,51 @@ Windows one-click helpers are also available:
 
 The smoke flow submits jobs through the same HTTP workflow used by the UI, carries the active SAM backend settings into the temporary service environment, and verifies that the queue reaches a completed result with generated artifacts.
 
+## Standalone Desktop Workbench
+
+The repository now also includes a native desktop workbench for the internal QA flow. This workbench is built with `PySide6` and reuses the existing Python draft, masking, inference, and export services instead of driving the workflow through browser pages.
+
+Current desktop flow:
+
+1. Open a local video file.
+2. Scrub the source monitor and define `In / Out`.
+3. Choose an anchor frame inside the selected segment.
+4. Create one or more targets with positive or negative clicks.
+5. Refine the current target with presets, brush cleanup, and numeric matte controls.
+6. Save target masks, choose export masks, and run MatAnyone2.
+7. Review `Source / Overlay / Alpha / Foreground` in the same workbench.
+
+### Start The Desktop App
+
+From the standalone desktop branch worktree:
+
+```powershell
+.\scripts\start_desktop_workbench.ps1
+```
+
+Manual launch is also available:
+
+```powershell
+python scripts\run_desktop_workbench.py
+```
+
+### Desktop Smoke Test
+
+Run an end-to-end local smoke that exercises:
+
+- draft creation
+- processing range selection
+- anchor application
+- mask creation
+- real MatAnyone2 inference
+- export generation
+
+```powershell
+python scripts\smoke_desktop_workbench.py
+```
+
+The smoke script writes its output under `runtime\desktop_workbench\smoke-*`.
+
 ## 📊 Evaluation
 Please refer to the [evaluation documentation](docs/EVAL.md) for details.
 
