@@ -25,6 +25,13 @@ def _state() -> DesktopSessionState:
     )
 
 
+def _state_for_step(step: str, *, sidebar_tab: str = "targets") -> DesktopSessionState:
+    state = _state()
+    state.workflow_step = step
+    state.active_sidebar_tab = sidebar_tab
+    return state
+
+
 def test_main_window_uses_single_monitor_workspace(qapp, tmp_path: Path):
     window = DesktopWorkbenchWindow(
         config=DesktopAppConfig.for_root(tmp_path),
@@ -86,3 +93,33 @@ def test_main_window_exposes_explicit_subject_selection_toolbar(qapp, tmp_path: 
         "Brush Feather",
     ]
     assert window.select_subject_button.isChecked() is True
+
+
+def test_main_window_prefers_refine_tab_during_refine_step(qapp, tmp_path: Path):
+    window = DesktopWorkbenchWindow(
+        config=DesktopAppConfig.for_root(tmp_path),
+        initial_state=_state_for_step("refine", sidebar_tab="targets"),
+    )
+
+    assert window.inspector_tabs.tabText(window.inspector_tabs.currentIndex()) == "Refine"
+
+
+def test_main_window_prefers_export_tab_during_review_step(qapp, tmp_path: Path):
+    window = DesktopWorkbenchWindow(
+        config=DesktopAppConfig.for_root(tmp_path),
+        initial_state=_state_for_step("review", sidebar_tab="targets"),
+    )
+
+    assert window.inspector_tabs.tabText(window.inspector_tabs.currentIndex()) == "Export"
+
+
+def test_toolbar_updates_hint_when_switching_tools(qapp, tmp_path: Path):
+    window = DesktopWorkbenchWindow(
+        config=DesktopAppConfig.for_root(tmp_path),
+        initial_state=_state_for_step("mask"),
+    )
+
+    window._set_interaction_mode("negative")
+
+    assert window.interaction_mode.currentText() == "Negative"
+    assert "exclude" in window.interaction_hint_label.text().lower()

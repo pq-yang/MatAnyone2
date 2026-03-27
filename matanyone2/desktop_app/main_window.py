@@ -145,6 +145,7 @@ class DesktopWorkbenchWindow(QMainWindow):
         center_layout.addLayout(view_row)
 
         tool_row = QHBoxLayout()
+        self.tool_group_label = QLabel("Mask Tools")
         self.select_subject_button = QPushButton("Select Subject")
         self.exclude_button = QPushButton("Exclude")
         self.brush_add_button = QPushButton("Brush Add")
@@ -157,6 +158,8 @@ class DesktopWorkbenchWindow(QMainWindow):
             "brush_remove": self.brush_remove_button,
             "brush_feather": self.brush_feather_button,
         }
+        tool_row.addWidget(self.tool_group_label)
+        tool_row.addSpacing(8)
         for button in self.interaction_toolbar_buttons.values():
             button.setCheckable(True)
             tool_row.addWidget(button)
@@ -354,7 +357,8 @@ class DesktopWorkbenchWindow(QMainWindow):
             return
         step_index = {"clip": 0, "mask": 1, "refine": 2, "review": 3}.get(self.state.workflow_step, 0)
         self.stepper.setCurrentIndex(step_index)
-        self.inspector_tabs.setCurrentIndex({"targets": 0, "refine": 1, "export": 2}.get(self.state.active_sidebar_tab, 0))
+        preferred_tab = self._preferred_sidebar_tab()
+        self.inspector_tabs.setCurrentIndex({"targets": 0, "refine": 1, "export": 2}.get(preferred_tab, 0))
         self.session_status_label.setText(f"Step: {self.state.workflow_step.title()} | Target: {self.state.active_target_name}")
         self.source_timeline.setMinimum(0)
         self.source_timeline.setMaximum(max(self.state.process_end_frame_index, 0))
@@ -370,6 +374,7 @@ class DesktopWorkbenchWindow(QMainWindow):
         self._sync_refine_controls()
         self._sync_action_states()
         self._update_timeline_labels()
+        self._sync_interaction_hint()
 
     def _sync_target_list(self) -> None:
         self.target_list.blockSignals(True)
@@ -431,6 +436,13 @@ class DesktopWorkbenchWindow(QMainWindow):
             button.setEnabled(can_edit)
         self.interaction_mode.setEnabled(can_edit)
         self.interaction_hint_label.setVisible(can_edit)
+
+    def _preferred_sidebar_tab(self) -> str:
+        if self.state.workflow_step == "review":
+            return "export"
+        if self.state.workflow_step == "refine":
+            return "refine"
+        return self.state.active_sidebar_tab
 
     def _update_timeline_labels(self) -> None:
         fps = self._active_fps()
@@ -666,12 +678,32 @@ class DesktopWorkbenchWindow(QMainWindow):
             self.interaction_mode.blockSignals(False)
         self.monitor.surface.set_brush_enabled(self.current_interaction_mode.startswith("brush_"))
         self._sync_interaction_toolbar()
+        self._sync_interaction_hint()
 
     def _sync_interaction_toolbar(self) -> None:
         for mode, button in self.interaction_toolbar_buttons.items():
             button.blockSignals(True)
             button.setChecked(mode == self.current_interaction_mode)
             button.blockSignals(False)
+
+    def _sync_interaction_hint(self) -> None:
+        if self.state.workflow_step == "clip":
+            message = "Set In and Out, then place the anchor frame to unlock masking."
+        elif self.state.workflow_step == "review":
+            message = "Review the processed clip here. Use Export to open outputs or return to Refine."
+        elif self.current_interaction_mode == "negative":
+            message = "Exclude mode is active. Click the monitor to subtract distracting regions."
+        elif self.current_interaction_mode == "brush_add":
+            message = "Brush Add is active. Drag on the monitor to recover missing matte detail."
+        elif self.current_interaction_mode == "brush_remove":
+            message = "Brush Remove is active. Drag on the monitor to trim spill or background."
+        elif self.current_interaction_mode == "brush_feather":
+            message = "Brush Feather is active. Drag on the monitor to soften edge transitions."
+        elif self.state.workflow_step == "refine":
+            message = "Select Subject is active. Click the monitor to reinforce the active target before refining."
+        else:
+            message = "Select Subject is active. Click the monitor to tag the active person or object."
+        self.interaction_hint_label.setText(message)
 
     def _on_refine_controls_changed(self) -> None:
         if self.controller is None:
