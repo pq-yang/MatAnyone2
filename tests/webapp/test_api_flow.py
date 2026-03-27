@@ -191,6 +191,34 @@ def test_target_update_round_trip(
     )
 
 
+def test_target_preset_change_rebuilds_current_mask_preview(
+    app_client: TestClient,
+    sample_video_upload,
+):
+    upload_response = app_client.post(
+        "/api/uploads",
+        files={"video": sample_video_upload},
+    )
+    draft_id = upload_response.json()["draft_id"]
+
+    app_client.post(
+        f"/api/drafts/{draft_id}/click",
+        json={"x": 1, "y": 1, "positive": True},
+    )
+    initial_mask = app_client.get(f"/api/drafts/{draft_id}/current-mask").content
+
+    update_response = app_client.patch(
+        f"/api/drafts/{draft_id}/targets/target-001",
+        json={"refine_preset": "hair"},
+    )
+    updated_mask = app_client.get(f"/api/drafts/{draft_id}/current-mask").content
+
+    assert update_response.status_code == 200
+    assert update_response.json()["current_mask_url"] is not None
+    assert update_response.json()["current_preview_url"] is not None
+    assert updated_mask != initial_mask
+
+
 def test_stage_change_round_trip(
     app_client: TestClient,
     sample_video_upload,

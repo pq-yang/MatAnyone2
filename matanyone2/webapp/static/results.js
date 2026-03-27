@@ -86,6 +86,8 @@ function bindResultsPage() {
       return;
     }
 
+    const presetMap = summary.selected_mask_presets || {};
+    const presetEntries = Object.entries(presetMap);
     const rows = [
       ["Source", summary.source_name || "Unknown source"],
       ["Status", payload.status_label || payload.status],
@@ -103,6 +105,13 @@ function bindResultsPage() {
           : summary.mask_name || "Awaiting export masks",
       ],
     ];
+
+    if (presetEntries.length > 0) {
+      rows.push([
+        "Preset strategy",
+        presetEntries.map(([maskName, preset]) => `${maskName}: ${preset}`).join(" | "),
+      ]);
+    }
 
     if (payload.queue_position) {
       rows.splice(2, 0, ["Queue", `Position ${payload.queue_position}`]);

@@ -133,8 +133,7 @@ class MaskingService:
         return DraftSession(draft=draft, session_dir=session_dir)
 
     def create_target(self, session: DraftSession, name: str | None = None) -> AnnotationTarget:
-        session.current_mask_path = None
-        session.current_preview_path = None
+        self._clear_current_render(session)
         return session.create_target(name=name)
 
     def select_target(self, session: DraftSession, target_id: str) -> AnnotationTarget:
@@ -168,6 +167,7 @@ class MaskingService:
             if refine_preset not in self.VALID_REFINE_PRESETS:
                 raise ValueError(f"unknown refine preset: {refine_preset}")
             target.refine_preset = refine_preset
+            self._rerender_current_from_base(session)
         return target
 
     def set_stage(self, session: DraftSession, stage: str) -> str:
@@ -268,7 +268,7 @@ class MaskingService:
         points = np.array(session.click_points, dtype=np.int32)
         labels = np.array(session.click_labels, dtype=np.int32)
 
-        mask, _, painted_image = self._get_controller().first_frame_click(
+        mask, _, _ = self._get_controller().first_frame_click(
             image=image,
             points=points,
             labels=labels,
@@ -277,13 +277,10 @@ class MaskingService:
 
         session.click_points = [(int(px), int(py)) for px, py in points.tolist()]
         session.click_labels = [int(label) for label in labels.tolist()]
-        return self._write_current_render(
-            session,
-            np.where(mask > 0, 255, 0).astype(np.uint8),
-            painted_image=painted_image,
-        )
+        return self._write_current_render(session, np.where(mask > 0, 255, 0).astype(np.uint8))
 
     def _clear_current_render(self, session: DraftSession) -> None:
+        session.current_mask_base_path = None
         session.current_mask_path = None
         session.current_preview_path = None
 
@@ -292,7 +289,7 @@ class MaskingService:
             raise ValueError("no current mask to save")
         mask_name = f"mask_{len(session.saved_masks) + 1:03d}"
         saved_mask_path = session.session_dir / f"{mask_name}.png"
-        current_mask = np.array(Image.open(session.current_mask_path).convert("L"), dtype=np.uint8)
+        current_mask = self._load_current_base_mask(session)
         processed_mask = self.apply_refine_preset(
             current_mask,
             session.active_target.refine_preset,
@@ -328,8 +325,8 @@ class MaskingService:
         return self._controller
 
     def _load_editable_mask(self, session: DraftSession) -> np.ndarray:
-        if session.current_mask_path is not None and session.current_mask_path.exists():
-            return np.array(Image.open(session.current_mask_path).convert("L"), dtype=np.uint8)
+        if session.current_mask_base_path is not None and session.current_mask_base_path.exists():
+            return np.array(Image.open(session.current_mask_base_path).convert("L"), dtype=np.uint8)
 
         saved_mask_name = session.active_target.saved_mask_name
         if saved_mask_name:
@@ -337,36 +334,61 @@ class MaskingService:
             if saved_mask_path is not None and saved_mask_path.exists():
                 return np.array(Image.open(saved_mask_path).convert("L"), dtype=np.uint8)
 
+        if session.current_mask_path is not None and session.current_mask_path.exists():
+            return np.array(Image.open(session.current_mask_path).convert("L"), dtype=np.uint8)
+
         height = session.draft.height
         width = session.draft.width
         return np.zeros((height, width), dtype=np.uint8)
+
+    def _load_current_base_mask(self, session: DraftSession) -> np.ndarray:
+        if session.current_mask_base_path is not None and session.current_mask_base_path.exists():
+            return np.array(Image.open(session.current_mask_base_path).convert("L"), dtype=np.uint8)
+        return self._load_editable_mask(session)
 
     def _write_current_render(
         self,
         session: DraftSession,
         mask: np.ndarray,
-        *,
-        painted_image: Image.Image | None = None,
     ) -> MaskingResult:
+        current_mask_base_path = session.session_dir / "current_mask_base.png"
         current_mask_path = session.session_dir / "current_mask.png"
         current_preview_path = session.session_dir / "current_preview.png"
-        Image.fromarray(np.where(mask > 0, 255, 0).astype(np.uint8), mode="L").save(
-            current_mask_path
-        )
+        base_mask = np.where(mask > 0, 255, 0).astype(np.uint8)
+        Image.fromarray(base_mask, mode="L").save(current_mask_base_path)
+        display_mask = self.apply_refine_preset(base_mask, session.active_target.refine_preset)
+        Image.fromarray(display_mask, mode="L").save(current_mask_path)
 
-        if painted_image is None:
-            image = np.array(Image.open(session.draft.template_frame_path).convert("RGB"))
-            points = np.array(session.click_points, dtype=np.int32)
-            labels = np.array(session.click_labels, dtype=np.int32)
-            painted_image = _render_mask_preview(image, mask, points, labels)
+        image = np.array(Image.open(session.draft.template_frame_path).convert("RGB"))
+        points = np.array(session.click_points, dtype=np.int32)
+        labels = np.array(session.click_labels, dtype=np.int32)
+        painted_image = _render_mask_preview(image, display_mask, points, labels)
 
         painted_image.save(current_preview_path)
+        session.current_mask_base_path = current_mask_base_path
         session.current_mask_path = current_mask_path
         session.current_preview_path = current_preview_path
         return MaskingResult(
             current_mask_path=current_mask_path,
             current_preview_path=current_preview_path,
         )
+
+    def _rerender_current_from_base(self, session: DraftSession) -> None:
+        if session.current_mask_base_path is not None and session.current_mask_base_path.exists():
+            base_mask = np.array(Image.open(session.current_mask_base_path).convert("L"), dtype=np.uint8)
+            self._write_current_render(session, base_mask)
+            return
+        if session.current_mask_path is not None and session.current_mask_path.exists():
+            base_mask = np.array(Image.open(session.current_mask_path).convert("L"), dtype=np.uint8)
+            self._write_current_render(session, base_mask)
+            return
+        saved_mask_name = session.active_target.saved_mask_name
+        if saved_mask_name:
+            saved_mask_path = session.saved_masks.get(saved_mask_name)
+            if saved_mask_path is not None and saved_mask_path.exists():
+                saved_mask = np.array(Image.open(saved_mask_path).convert("L"), dtype=np.uint8)
+                self._write_current_render(session, saved_mask)
+                return
 
     def _hydrate_target_render(self, session: DraftSession) -> None:
         if session.click_points:

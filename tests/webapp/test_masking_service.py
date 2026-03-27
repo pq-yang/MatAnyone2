@@ -155,6 +155,40 @@ def test_save_current_mask_applies_edge_preset_to_tighten_mask(tmp_path):
     assert int(saved_mask.sum()) < int(original_mask.sum())
 
 
+def test_update_target_reapplies_current_render_for_new_refine_preset(tmp_path):
+    template_frame = tmp_path / "template.png"
+    Image.new("RGB", (9, 9), color=(0, 0, 0)).save(template_frame)
+    draft = DraftRecord(
+        draft_id="draft-1",
+        video_path=tmp_path / "input.mp4",
+        template_frame_path=template_frame,
+        width=9,
+        height=9,
+        fps=24.0,
+        frame_count=1,
+        duration_seconds=0.04,
+    )
+
+    service = MaskingService(runtime_root=tmp_path, controller_factory=lambda: None)
+    session = service.create_session(draft)
+    base_mask = np.zeros((9, 9), dtype=np.uint8)
+    base_mask[4, 4] = 255
+    session.current_mask_path = session.session_dir / "current_mask.png"
+    Image.fromarray(base_mask, mode="L").save(session.current_mask_path)
+
+    service.update_target(
+        session,
+        session.active_target_id,
+        refine_preset="hair",
+    )
+
+    rerendered_mask = np.array(Image.open(session.current_mask_path).convert("L"))
+
+    assert int(rerendered_mask.sum()) > int(base_mask.sum())
+    assert session.current_preview_path is not None
+    assert session.current_preview_path.exists()
+
+
 def test_update_target_mutates_name_visibility_and_lock_state(tmp_path):
     template_frame = tmp_path / "template.png"
     Image.new("RGB", (4, 4), color=(0, 0, 0)).save(template_frame)
