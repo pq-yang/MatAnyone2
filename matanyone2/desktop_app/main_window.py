@@ -444,6 +444,12 @@ class DesktopWorkbenchWindow(QMainWindow):
             return "refine"
         return self.state.active_sidebar_tab
 
+    def _is_full_clip_range(self) -> bool:
+        return (
+            self.source_timeline.minimum() == self.state.process_start_frame_index
+            and self.source_timeline.maximum() == self.state.process_end_frame_index
+        )
+
     def _update_timeline_labels(self) -> None:
         fps = self._active_fps()
         self.current_time_label.setText(self._format_timecode(self.current_playhead_frame, fps))
@@ -688,7 +694,10 @@ class DesktopWorkbenchWindow(QMainWindow):
 
     def _sync_interaction_hint(self) -> None:
         if self.state.workflow_step == "clip":
-            message = "Set In and Out, then place the anchor frame to unlock masking."
+            if self._is_full_clip_range():
+                message = "Whole clip is active by default. Drag the anchor rail to choose the segmentation frame, or use Mark In/Out only if you want to trim the range."
+            else:
+                message = "Trimmed range is active. Drag the anchor rail inside the selected segment, or use Clear to go back to the whole clip."
         elif self.state.workflow_step == "review":
             message = "Review the processed clip here. Use Export to open outputs or return to Refine."
         elif self.current_interaction_mode == "negative":

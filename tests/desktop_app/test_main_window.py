@@ -123,3 +123,32 @@ def test_toolbar_updates_hint_when_switching_tools(qapp, tmp_path: Path):
 
     assert window.interaction_mode.currentText() == "Negative"
     assert "exclude" in window.interaction_hint_label.text().lower()
+
+
+def test_clip_hint_defaults_to_whole_clip_when_range_not_trimmed(qapp, tmp_path: Path):
+    window = DesktopWorkbenchWindow(
+        config=DesktopAppConfig.for_root(tmp_path),
+        initial_state=_state_for_step("clip"),
+    )
+    window.source_timeline.setMinimum(0)
+    window.source_timeline.setMaximum(99)
+    window.state.process_start_frame_index = 0
+    window.state.process_end_frame_index = 99
+    window._sync_interaction_hint()
+
+    assert "whole clip" in window.interaction_hint_label.text().lower()
+    assert "mark in/out" in window.interaction_hint_label.text().lower()
+
+
+def test_clip_hint_switches_when_range_is_trimmed(qapp, tmp_path: Path):
+    window = DesktopWorkbenchWindow(
+        config=DesktopAppConfig.for_root(tmp_path),
+        initial_state=_state_for_step("clip"),
+    )
+    window.source_timeline.setMinimum(0)
+    window.source_timeline.setMaximum(99)
+    window.state.process_start_frame_index = 12
+    window.state.process_end_frame_index = 48
+    window._sync_interaction_hint()
+
+    assert "trimmed range" in window.interaction_hint_label.text().lower()
