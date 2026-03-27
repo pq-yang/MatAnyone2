@@ -1017,6 +1017,16 @@ button {
   flex-wrap: wrap;
 }
 
+.timeline-inline-actions--compact {
+  flex-wrap: nowrap;
+}
+
+.timeline-inline-actions--compact .tool-button {
+  width: auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
 .anchor-control-group {
   gap: var(--space-4);
 }

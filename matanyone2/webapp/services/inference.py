@@ -19,6 +19,8 @@ class InferenceService:
         template_frame_index: int,
         process_start_frame_index: int = 0,
         process_end_frame_index: int | None = None,
+        selected_mask_controls: dict[str, dict] | None = None,
+        selected_mask_presets: dict[str, str] | None = None,
     ) -> InferenceResult:
         source_video_path = Path(source_video_path)
         mask_path = Path(mask_path)
@@ -30,12 +32,18 @@ class InferenceService:
             process_end_frame_index=process_end_frame_index,
             template_frame_index=template_frame_index,
         )
+        inference_hyperparameters = self._resolve_inference_hyperparameters(
+            source_video_path=clip_source_video_path,
+            selected_mask_controls=selected_mask_controls or {},
+            selected_mask_presets=selected_mask_presets or {},
+        )
         if relative_anchor_frame_index > 0:
             foreground_path, alpha_path = self._run_bidirectional_job(
                 source_video_path=clip_source_video_path,
                 mask_path=mask_path,
                 job_dir=job_dir,
                 template_frame_index=relative_anchor_frame_index,
+                **inference_hyperparameters,
             )
         else:
             foreground_path, alpha_path = self._run_model(
@@ -43,6 +51,7 @@ class InferenceService:
                 mask_path=mask_path,
                 job_dir=job_dir,
                 template_frame_index=relative_anchor_frame_index,
+                **inference_hyperparameters,
             )
         return InferenceResult(
             foreground_video_path=foreground_path,
@@ -86,6 +95,9 @@ class InferenceService:
         mask_path: Path,
         job_dir: Path,
         template_frame_index: int,
+        n_warmup: int,
+        r_erode: int,
+        r_dilate: int,
     ) -> tuple[Path, Path]:
         frames, fps = self._read_video_frames(source_video_path)
         if not frames:
@@ -110,12 +122,18 @@ class InferenceService:
             mask_path=mask_path,
             job_dir=forward_job_dir,
             template_frame_index=0,
+            n_warmup=n_warmup,
+            r_erode=r_erode,
+            r_dilate=r_dilate,
         )
         backward_foreground, backward_alpha = self._run_model(
             source_video_path=backward_input,
             mask_path=mask_path,
             job_dir=backward_job_dir,
             template_frame_index=0,
+            n_warmup=n_warmup,
+            r_erode=r_erode,
+            r_dilate=r_dilate,
         )
 
         foreground_path = job_dir / "foreground.mp4"
@@ -141,6 +159,9 @@ class InferenceService:
         mask_path: Path,
         job_dir: Path,
         template_frame_index: int,
+        n_warmup: int,
+        r_erode: int,
+        r_dilate: int,
     ) -> tuple[Path, Path]:
         del template_frame_index
         from inference_matanyone2 import main as run_inference
@@ -152,6 +173,9 @@ class InferenceService:
             mask_path=str(mask_path),
             output_path=str(job_dir),
             ckpt_path="pretrained_models/matanyone2.pth",
+            n_warmup=n_warmup,
+            r_erode=r_erode,
+            r_dilate=r_dilate,
         )
 
         stem = source_video_path.stem
@@ -162,6 +186,51 @@ class InferenceService:
         shutil.move(generated_foreground, foreground_path)
         shutil.move(generated_alpha, alpha_path)
         return foreground_path, alpha_path
+
+    def _resolve_inference_hyperparameters(
+        self,
+        *,
+        source_video_path: Path,
+        selected_mask_controls: dict[str, dict],
+        selected_mask_presets: dict[str, str],
+    ) -> dict[str, int]:
+        width, height = self._read_video_size(source_video_path)
+        max_side = max(width, height)
+        min_side = min(width, height)
+        is_high_resolution = min_side >= 1000 or max_side >= 1700
+
+        options = {
+            "n_warmup": 10 if is_high_resolution else 1,
+            "r_erode": 15 if is_high_resolution else 4,
+            "r_dilate": 15 if is_high_resolution else 4,
+        }
+
+        preset_values = set(selected_mask_presets.values())
+        max_feather_radius = max(
+            (float(control.get("edge_feather_radius", 0.0)) for control in selected_mask_controls.values()),
+            default=0.0,
+        )
+        max_temporal_stability = max(
+            (float(control.get("temporal_stability", 0.0)) for control in selected_mask_controls.values()),
+            default=0.0,
+        )
+
+        if "hair" in preset_values:
+            options["n_warmup"] = max(options["n_warmup"], 10) + 2
+            options["r_dilate"] += 2
+        if "edge" in preset_values:
+            options["r_erode"] += 1
+        if "motion" in preset_values:
+            options["r_dilate"] += 1
+        if max_feather_radius >= 4.0:
+            options["r_dilate"] += 1
+        if max_temporal_stability >= 0.5:
+            options["n_warmup"] += 1
+
+        options["n_warmup"] = min(options["n_warmup"], 16)
+        options["r_erode"] = min(options["r_erode"], 21)
+        options["r_dilate"] = min(options["r_dilate"], 21)
+        return options
 
     def _read_video_frames(self, video_path: Path) -> tuple[list, float]:
         capture = cv2.VideoCapture(str(video_path))
@@ -176,6 +245,15 @@ class InferenceService:
         finally:
             capture.release()
         return frames, fps if fps > 0 else 24.0
+
+    def _read_video_size(self, video_path: Path) -> tuple[int, int]:
+        capture = cv2.VideoCapture(str(video_path))
+        try:
+            width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+            height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+        finally:
+            capture.release()
+        return width, height
 
     def _write_video_frames(self, frames: list, output_path: Path, *, fps: float) -> Path:
         if not frames:

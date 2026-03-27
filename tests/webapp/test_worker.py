@@ -38,9 +38,23 @@ def test_process_next_job_completes_with_warning_when_export_warns(tmp_path):
     )
 
     class FakeInferenceService:
-        def run_job(self, *, source_video_path, mask_path, job_dir, template_frame_index, process_start_frame_index, process_end_frame_index):
+        def run_job(
+            self,
+            *,
+            source_video_path,
+            mask_path,
+            job_dir,
+            template_frame_index,
+            process_start_frame_index,
+            process_end_frame_index,
+            selected_mask_controls,
+            selected_mask_presets,
+        ):
             assert process_start_frame_index == 3
             assert process_end_frame_index == 9
+            assert selected_mask_controls["mask_001"]["motion_strength"] == 0.6
+            assert selected_mask_controls["mask_001"]["temporal_stability"] == 0.8
+            assert selected_mask_presets == {}
             foreground = Path(job_dir) / "foreground.mp4"
             alpha = Path(job_dir) / "alpha.mp4"
             foreground.write_bytes(b"fg")
@@ -63,9 +77,11 @@ def test_process_next_job_completes_with_warning_when_export_warns(tmp_path):
             *,
             motion_strength,
             temporal_stability,
+            edge_feather_radius,
         ):
             assert motion_strength == 0.6
             assert temporal_stability == 0.8
+            assert edge_feather_radius == 0.0
             rgba_dir = Path(job_dir) / "rgba_png"
             rgba_dir.mkdir(parents=True, exist_ok=True)
             zip_path = Path(job_dir) / "rgba_png.zip"

@@ -105,6 +105,7 @@ def test_submit_persists_selected_mask_presets_in_job_params(
 
     assert submit_response.status_code == 200
     assert params["selected_mask_presets"] == {"mask_001": "hair"}
+    assert params["selected_mask_controls"]["mask_001"]["edge_feather_radius"] == 0.0
 
 
 def test_annotation_page_exposes_workbench_contract(
@@ -221,6 +222,7 @@ def test_target_update_round_trip_includes_numeric_refine_controls(
             "preset_strength": 0.85,
             "motion_strength": 0.55,
             "temporal_stability": 0.7,
+            "edge_feather_radius": 9.0,
         },
     )
 
@@ -232,6 +234,7 @@ def test_target_update_round_trip_includes_numeric_refine_controls(
     assert active_target["preset_strength"] == 0.85
     assert active_target["motion_strength"] == 0.55
     assert active_target["temporal_stability"] == 0.7
+    assert active_target["edge_feather_radius"] == 9.0
 
 
 def test_template_frame_selection_round_trip(

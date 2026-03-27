@@ -106,7 +106,10 @@ def merge_masks(masks: list[np.ndarray]) -> np.ndarray:
 
     merged = np.zeros_like(masks[0], dtype=np.uint8)
     for mask in masks:
-        merged = np.where(mask > 0, 255, merged).astype(np.uint8)
+        mask_uint8 = mask.astype(np.uint8)
+        if mask_uint8.max() <= 1:
+            mask_uint8 = mask_uint8 * 255
+        merged = np.maximum(merged, mask_uint8)
     return merged
 
 
@@ -252,6 +255,7 @@ class MaskingService:
         preset_strength: float | None = None,
         motion_strength: float | None = None,
         temporal_stability: float | None = None,
+        edge_feather_radius: float | None = None,
     ) -> AnnotationTarget:
         target = session.targets.get(target_id)
         if target is None:
@@ -284,11 +288,18 @@ class MaskingService:
                 temporal_stability,
                 field_name="temporal_stability",
             )
+        if edge_feather_radius is not None:
+            target.edge_feather_radius = self._validate_non_negative(
+                edge_feather_radius,
+                field_name="edge_feather_radius",
+                maximum=24.0,
+            )
         if (
             refine_preset is not None
             or preset_strength is not None
             or motion_strength is not None
             or temporal_stability is not None
+            or edge_feather_radius is not None
         ):
             self._rerender_current_from_base(session)
         return target
@@ -441,6 +452,36 @@ class MaskingService:
         stabilized_image = stabilized_image.filter(ImageFilter.MinFilter(filter_size))
         return np.where(np.array(stabilized_image, dtype=np.uint8) > 127, 255, 0).astype(np.uint8)
 
+    def apply_edge_feather(
+        self,
+        mask: np.ndarray,
+        *,
+        feather_radius: float = 0.0,
+    ) -> np.ndarray:
+        feather_radius = self._validate_non_negative(
+            feather_radius,
+            field_name="edge_feather_radius",
+            maximum=24.0,
+        )
+        base_mask = np.clip(mask, 0, 255).astype(np.uint8)
+        if feather_radius <= 0:
+            return base_mask
+
+        mask_image = Image.fromarray(base_mask, mode="L")
+        blurred_image = mask_image.filter(ImageFilter.GaussianBlur(radius=feather_radius))
+        binary_mask = np.where(base_mask > 127, 255, 0).astype(np.uint8)
+        binary_image = Image.fromarray(binary_mask, mode="L")
+        kernel_size = self._odd_kernel_size(max(3, int(round(min(feather_radius, 3.0)))))
+        dilated = np.array(binary_image.filter(ImageFilter.MaxFilter(kernel_size)), dtype=np.uint8)
+        eroded = np.array(binary_image.filter(ImageFilter.MinFilter(kernel_size)), dtype=np.uint8)
+        edge_band = np.clip(dilated.astype(np.int16) - eroded.astype(np.int16), 0, 255).astype(np.uint8)
+        edge_weight = edge_band.astype(np.float32) / 255.0
+
+        base_float = base_mask.astype(np.float32)
+        blurred_float = np.array(blurred_image, dtype=np.uint8).astype(np.float32)
+        feathered = (base_float * (1.0 - edge_weight)) + (blurred_float * edge_weight)
+        return np.clip(feathered, 0, 255).astype(np.uint8)
+
     def apply_target_controls(
         self,
         mask: np.ndarray,
@@ -453,9 +494,13 @@ class MaskingService:
             motion_strength=target.motion_strength,
         )
         temporal_input = refined_mask if np.any(refined_mask > 0) else np.where(mask > 127, 255, 0).astype(np.uint8)
-        return self.apply_temporal_stability_preview(
+        stabilized_mask = self.apply_temporal_stability_preview(
             temporal_input,
             temporal_stability=target.temporal_stability,
+        )
+        return self.apply_edge_feather(
+            stabilized_mask,
+            feather_radius=target.edge_feather_radius,
         )
 
     def reset_session_for_template_frame(self, session: DraftSession, *, frame_index: int) -> None:
@@ -714,6 +759,20 @@ class MaskingService:
         numeric = float(value)
         if numeric < 0.0 or numeric > 1.0:
             raise ValueError(f"{field_name} must be between 0.0 and 1.0")
+        return numeric
+
+    @staticmethod
+    def _validate_non_negative(
+        value: float,
+        *,
+        field_name: str,
+        maximum: float | None = None,
+    ) -> float:
+        numeric = float(value)
+        if numeric < 0.0:
+            raise ValueError(f"{field_name} must be non-negative")
+        if maximum is not None and numeric > maximum:
+            raise ValueError(f"{field_name} must be at most {maximum}")
         return numeric
 
     @staticmethod

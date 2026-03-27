@@ -45,6 +45,7 @@ class WorkerLoop:
             self.repository.update_status(job.job_id, JobStatus.RUNNING)
             job_params = json.loads(job.params_json or "{}")
             selected_mask_controls = job_params.get("selected_mask_controls", {})
+            selected_mask_presets = job_params.get("selected_mask_presets", {})
             motion_strength = max(
                 (
                     float(control.get("motion_strength", 0.0))
@@ -59,6 +60,13 @@ class WorkerLoop:
                 ),
                 default=0.0,
             )
+            edge_feather_radius = max(
+                (
+                    float(control.get("edge_feather_radius", 0.0))
+                    for control in selected_mask_controls.values()
+                ),
+                default=0.0,
+            )
             inference_result = self.inference_service.run_job(
                 source_video_path=Path(job.source_video_path),
                 mask_path=Path(job.mask_path),
@@ -66,6 +74,8 @@ class WorkerLoop:
                 template_frame_index=job.template_frame_index,
                 process_start_frame_index=int(job_params.get("process_start_frame_index", 0)),
                 process_end_frame_index=job_params.get("process_end_frame_index"),
+                selected_mask_controls=selected_mask_controls,
+                selected_mask_presets=selected_mask_presets,
             )
             self.repository.update_status(job.job_id, JobStatus.EXPORTING)
             export_result = self.export_service.export_assets(
@@ -74,6 +84,7 @@ class WorkerLoop:
                 job_dir,
                 motion_strength=motion_strength,
                 temporal_stability=temporal_stability,
+                edge_feather_radius=edge_feather_radius,
             )
         except Exception as exc:
             self.repository.update_status(

@@ -28,18 +28,25 @@ class ExportService:
         *,
         motion_strength: float = 0.0,
         temporal_stability: float = 0.0,
+        edge_feather_radius: float = 0.0,
     ) -> ExportResult:
         foreground_frames, alpha_frames, fps = self._extract_frames(
             foreground_video_path,
             alpha_video_path,
             job_dir,
         )
-        rgba_png_dir = self._write_rgba_pngs(
-            foreground_frames,
+        processed_alpha_frames = self._process_alpha_frames(
             alpha_frames,
-            job_dir,
             motion_strength=motion_strength,
             temporal_stability=temporal_stability,
+            edge_feather_radius=edge_feather_radius,
+        )
+        self._overwrite_alpha_frames(alpha_frames, processed_alpha_frames)
+        self._write_alpha_video(processed_alpha_frames, alpha_video_path, fps=fps)
+        rgba_png_dir = self._write_rgba_pngs(
+            foreground_frames,
+            processed_alpha_frames,
+            job_dir,
         )
         png_zip_path = self._zip_directory(rgba_png_dir, job_dir / "rgba_png.zip")
         preview_foreground_path = None
@@ -118,17 +125,15 @@ class ExportService:
             fps = 24.0
         return foreground_paths, alpha_paths, fps
 
-    def _write_rgba_pngs(
+    def _process_alpha_frames(
         self,
-        foreground_frames: list[Path],
         alpha_frames: list[Path],
-        job_dir: Path,
         *,
         motion_strength: float,
         temporal_stability: float,
-    ) -> Path:
-        rgba_dir = ensure_dir(job_dir / "rgba_png")
-        processed_alpha_frames = []
+        edge_feather_radius: float,
+    ) -> list[np.ndarray]:
+        processed_alpha_frames: list[np.ndarray] = []
         for alpha_path in alpha_frames:
             alpha_image = cv2.imread(str(alpha_path), cv2.IMREAD_UNCHANGED)
             if alpha_image is None:
@@ -145,15 +150,33 @@ class ExportService:
             processed_alpha_frames,
             temporal_stability=temporal_stability,
         )
-        for index, (foreground_path, alpha_path) in enumerate(
-            zip(foreground_frames, alpha_frames, strict=True)
+        return [
+            self._apply_edge_feather(alpha_frame, feather_radius=edge_feather_radius)
+            for alpha_frame in processed_alpha_frames
+        ]
+
+    def _overwrite_alpha_frames(
+        self,
+        alpha_frames: list[Path],
+        processed_alpha_frames: list[np.ndarray],
+    ) -> None:
+        for alpha_path, alpha_frame in zip(alpha_frames, processed_alpha_frames, strict=True):
+            cv2.imwrite(str(alpha_path), alpha_frame)
+
+    def _write_rgba_pngs(
+        self,
+        foreground_frames: list[Path],
+        processed_alpha_frames: list[np.ndarray],
+        job_dir: Path,
+    ) -> Path:
+        rgba_dir = ensure_dir(job_dir / "rgba_png")
+        for index, (foreground_path, alpha_gray) in enumerate(
+            zip(foreground_frames, processed_alpha_frames, strict=True)
         ):
             foreground_rgb = cv2.cvtColor(
                 cv2.imread(str(foreground_path), cv2.IMREAD_COLOR),
                 cv2.COLOR_BGR2RGB,
             )
-            alpha_gray = processed_alpha_frames[index]
-            cv2.imwrite(str(alpha_path), alpha_gray)
             rgba_frame = compose_rgba_frame(foreground_rgb, alpha_gray)
             rgba_frame.save(rgba_dir / f"{index:04d}.png")
         return rgba_dir
@@ -180,19 +203,97 @@ class ExportService:
         if temporal_stability <= 0 or len(alpha_frames) <= 1:
             return [frame.astype(np.uint8) for frame in alpha_frames]
 
-        stabilized = [alpha_frames[0].astype(np.uint8)]
-        blended_previous = alpha_frames[0].astype(np.float32)
-        for current in alpha_frames[1:]:
-            blended = cv2.addWeighted(
-                current.astype(np.float32),
+        stabilized: list[np.ndarray] = []
+        window_radius = max(1, int(round(1 + (temporal_stability * 2))))
+        for index, current in enumerate(alpha_frames):
+            start = max(0, index - window_radius)
+            end = min(len(alpha_frames), index + window_radius + 1)
+            window = np.stack(alpha_frames[start:end]).astype(np.float32)
+            median_frame = np.median(window, axis=0)
+            mean_frame = np.mean(window, axis=0)
+            current_float = current.astype(np.float32)
+
+            binary = np.where(current > 127, 255, 0).astype(np.uint8)
+            kernel_size = self._odd_kernel_size(3 + int(round(temporal_stability * 4)))
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
+            edge_band = cv2.morphologyEx(binary, cv2.MORPH_GRADIENT, kernel)
+            semitransparent = (
+                ((current > 8) & (current < 247))
+                | ((median_frame > 8) & (median_frame < 247))
+            )
+            edge_mask = (edge_band > 0) | semitransparent
+
+            core_blend = cv2.addWeighted(
+                current_float,
+                1.0 - (temporal_stability * 0.25),
+                mean_frame,
+                temporal_stability * 0.25,
+                0.0,
+            )
+            edge_blend = cv2.addWeighted(
+                current_float,
                 1.0 - temporal_stability,
-                blended_previous,
+                median_frame,
                 temporal_stability,
                 0.0,
             )
-            stabilized.append(np.clip(blended, 0, 255).astype(np.uint8))
-            blended_previous = blended
+            stabilized_frame = core_blend
+            stabilized_frame[edge_mask] = edge_blend[edge_mask]
+            stabilized.append(np.clip(stabilized_frame, 0, 255).astype(np.uint8))
         return stabilized
+
+    def _apply_edge_feather(
+        self,
+        alpha_frame: np.ndarray,
+        *,
+        feather_radius: float,
+    ) -> np.ndarray:
+        feather_radius = max(0.0, float(feather_radius))
+        base = np.clip(alpha_frame, 0, 255).astype(np.uint8)
+        if feather_radius <= 0:
+            return base
+
+        kernel_size = self._odd_kernel_size(max(3, int(round(min(feather_radius, 3.0)))))
+        blur_size = self._odd_kernel_size(max(3, int(round((feather_radius * 2.0) + 1.0))))
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
+        binary = np.where(base > 127, 255, 0).astype(np.uint8)
+        edge_band = cv2.morphologyEx(binary, cv2.MORPH_GRADIENT, kernel)
+        edge_weight = edge_band.astype(np.float32) / 255.0
+        edge_mask = (edge_band > 0) | ((base > 0) & (base < 255))
+        blurred = cv2.GaussianBlur(
+            base,
+            (blur_size, blur_size),
+            sigmaX=max(0.8, feather_radius / 2.0),
+        )
+        feathered = base.astype(np.float32)
+        feathered[edge_mask] = (
+            (base.astype(np.float32)[edge_mask] * (1.0 - edge_weight[edge_mask]))
+            + (blurred.astype(np.float32)[edge_mask] * edge_weight[edge_mask])
+        )
+        return np.clip(feathered, 0, 255).astype(np.uint8)
+
+    def _write_alpha_video(
+        self,
+        alpha_frames: list[np.ndarray],
+        output_path: Path,
+        *,
+        fps: float,
+    ) -> Path:
+        if not alpha_frames:
+            raise RuntimeError("cannot write an empty alpha video")
+        height, width = alpha_frames[0].shape[:2]
+        writer = cv2.VideoWriter(
+            str(output_path),
+            cv2.VideoWriter_fourcc(*"mp4v"),
+            fps if fps > 0 else 24.0,
+            (width, height),
+        )
+        try:
+            for frame in alpha_frames:
+                writer.write(cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR))
+        finally:
+            writer.release()
+        return output_path
 
     def _zip_directory(self, source_dir: Path, zip_path: Path) -> Path:
         with zipfile.ZipFile(zip_path, "w") as archive:
@@ -296,3 +397,7 @@ class ExportService:
         if not existing:
             return incoming
         return f"{existing}\n{incoming}"
+
+    @staticmethod
+    def _odd_kernel_size(size: int) -> int:
+        return size if size % 2 == 1 else size + 1

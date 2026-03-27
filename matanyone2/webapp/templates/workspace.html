@@ -182,6 +182,10 @@
               <span class="workflow-field__label">Temporal stability <output id="temporal-stability-value" for="temporal-stability">0%</output></span>
               <input id="temporal-stability" type="range" min="0" max="100" value="0">
             </label>
+            <label class="workflow-field" for="edge-feather-radius">
+              <span class="workflow-field__label">Edge feather <output id="edge-feather-radius-value" for="edge-feather-radius">0 px</output></span>
+              <input id="edge-feather-radius" type="range" min="0" max="24" value="0">
+            </label>
             <label class="workflow-field" for="brush-radius">
               <span class="workflow-field__label">Brush size <output id="brush-radius-value" for="brush-radius">28 px</output></span>
               <input id="brush-radius" type="range" min="6" max="80" value="28">
@@ -285,7 +289,7 @@
         </div>
 
         <div class="timeline-row timeline-row--actions">
-          <div class="timeline-inline-actions">
+          <div class="timeline-inline-actions timeline-inline-actions--compact">
             <button id="mark-range-in" class="tool-button tool-button--compact" type="button">Mark In</button>
             <button id="mark-range-out" class="tool-button tool-button--compact" type="button">Mark Out</button>
             <button id="clear-range-selection" class="tool-button tool-button--ghost tool-button--compact" type="button">Clear</button>

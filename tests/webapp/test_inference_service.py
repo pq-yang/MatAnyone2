@@ -92,6 +92,50 @@ def test_run_job_uses_processing_range_clip_and_relative_anchor(tmp_path, monkey
     assert result.foreground_video_path.name == "foreground.mp4"
 
 
+def test_run_job_passes_resolved_inference_hyperparameters_to_model(tmp_path, monkeypatch):
+    service = InferenceService(model_name="MatAnyone 2")
+    job_dir = tmp_path / "job-1"
+    job_dir.mkdir()
+    observed = {}
+
+    clip_path = job_dir / "processing_range.mp4"
+    clip_path.write_bytes(b"clip")
+
+    monkeypatch.setattr(
+        service,
+        "_prepare_processing_clip",
+        lambda **kwargs: (clip_path, 0, 24.0),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        service,
+        "_resolve_inference_hyperparameters",
+        lambda **kwargs: {"n_warmup": 12, "r_erode": 14, "r_dilate": 16},
+        raising=False,
+    )
+
+    def fake_run_model(**kwargs):
+        observed.update(kwargs)
+        return Path(job_dir / "foreground.mp4"), Path(job_dir / "alpha.mp4")
+
+    monkeypatch.setattr(service, "_run_model", fake_run_model, raising=False)
+
+    service.run_job(
+        source_video_path=Path("input.mp4"),
+        mask_path=Path("mask.png"),
+        job_dir=job_dir,
+        template_frame_index=0,
+        process_start_frame_index=0,
+        process_end_frame_index=None,
+        selected_mask_controls={"mask_001": {"edge_feather_radius": 6.0, "temporal_stability": 0.8}},
+        selected_mask_presets={"mask_001": "hair"},
+    )
+
+    assert observed["n_warmup"] == 12
+    assert observed["r_erode"] == 14
+    assert observed["r_dilate"] == 16
+
+
 def test_get_matanyone2_model_can_be_called_twice_in_same_process(monkeypatch, tmp_path):
     checkpoint_path = tmp_path / "matanyone2.pth"
     checkpoint_path.write_bytes(b"weights")

@@ -38,6 +38,7 @@ class DraftTargetUpdatePayload(BaseModel):
     preset_strength: float | None = None
     motion_strength: float | None = None
     temporal_stability: float | None = None
+    edge_feather_radius: float | None = None
 
 
 class DraftStagePayload(BaseModel):
@@ -113,6 +114,7 @@ def _target_payload(target, session):
         "preset_strength": target.preset_strength,
         "motion_strength": target.motion_strength,
         "temporal_stability": target.temporal_stability,
+        "edge_feather_radius": target.edge_feather_radius,
         "saved_mask_name": target.saved_mask_name,
         "selected": target.target_id == session.active_target_id,
     }
@@ -306,6 +308,7 @@ def update_target(
             preset_strength=payload.preset_strength,
             motion_strength=payload.motion_strength,
             temporal_stability=payload.temporal_stability,
+            edge_feather_radius=payload.edge_feather_radius,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"target not found: {target_id}") from exc
@@ -547,6 +550,14 @@ def submit_draft(
                         "temporal_stability": next(
                             (
                                 target.temporal_stability
+                                for target in session.targets.values()
+                                if target.saved_mask_name == mask_name
+                            ),
+                            0.0,
+                        ),
+                        "edge_feather_radius": next(
+                            (
+                                target.edge_feather_radius
                                 for target in session.targets.values()
                                 if target.saved_mask_name == mask_name
                             ),

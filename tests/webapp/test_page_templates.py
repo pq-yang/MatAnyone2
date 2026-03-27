@@ -56,6 +56,7 @@ def test_annotation_page_renders_workbench_layout(
     assert 'id="mark-range-in"' in response.text
     assert 'id="mark-range-out"' in response.text
     assert 'id="clear-range-selection"' in response.text
+    assert 'class="timeline-inline-actions timeline-inline-actions--compact"' in response.text
     assert 'id="timeline-current-label"' in response.text
     assert 'id="timeline-in-chip"' in response.text
     assert 'id="timeline-out-chip"' in response.text
@@ -71,6 +72,7 @@ def test_annotation_page_renders_workbench_layout(
     assert 'id="preset-strength"' in response.text
     assert 'id="motion-strength"' in response.text
     assert 'id="temporal-stability"' in response.text
+    assert 'id="edge-feather-radius"' in response.text
     assert 'id="workspace-review-sidebar"' in response.text
     assert 'id="review-summary-list"' in response.text
     assert 'id="target-review-list"' in response.text

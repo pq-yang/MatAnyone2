@@ -61,6 +61,7 @@ class AnnotationTarget:
     preset_strength: float = 0.5
     motion_strength: float = 0.35
     temporal_stability: float = 0.0
+    edge_feather_radius: float = 0.0
 
 
 @dataclass(slots=True)

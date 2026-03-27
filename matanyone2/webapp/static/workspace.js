@@ -103,6 +103,8 @@ function bindWorkbench() {
   const motionStrengthValue = document.getElementById("motion-strength-value");
   const temporalStabilityInput = document.getElementById("temporal-stability");
   const temporalStabilityValue = document.getElementById("temporal-stability-value");
+  const edgeFeatherRadiusInput = document.getElementById("edge-feather-radius");
+  const edgeFeatherRadiusValue = document.getElementById("edge-feather-radius-value");
   const compareToggle = document.getElementById("compare-toggle");
   const compareDrawer = document.getElementById("compare-drawer");
   const previewBeforeImage = document.getElementById("preview-before-image");
@@ -785,6 +787,10 @@ function bindWorkbench() {
       temporalStabilityInput.value = String(Math.round((currentTarget.temporal_stability || 0) * 100));
       updateRangeOutput(temporalStabilityValue, Number(temporalStabilityInput.value));
     }
+    if (edgeFeatherRadiusInput) {
+      edgeFeatherRadiusInput.value = String(Math.round(currentTarget.edge_feather_radius || 0));
+      updateRangeOutput(edgeFeatherRadiusValue, Number(edgeFeatherRadiusInput.value), " px");
+    }
   }
 
   function applyImagePresentation() {
@@ -1195,7 +1201,7 @@ function bindWorkbench() {
         ? "Brush refinement stays locked until an anchor frame has been applied inside the green processing segment."
         : payload.stage === "preview"
         ? "Brush refinement is disabled in preview mode."
-        : "Brush actions edit the active mask directly, which is useful when SAM2 gets the rough silhouette but misses small edge corrections.";
+        : "Brush actions edit the active mask directly, which is useful when SAM3 gets the rough silhouette but misses small edge corrections.";
     }
 
     if (inspectorStage) {
@@ -1649,6 +1655,15 @@ function bindWorkbench() {
       { temporal_stability: Number(temporalStabilityInput.value) / 100 },
       "Refreshing live detail preview...",
       () => "Temporal stability updated."
+    );
+  });
+
+  edgeFeatherRadiusInput?.addEventListener("input", () => {
+    updateRangeOutput(edgeFeatherRadiusValue, Number(edgeFeatherRadiusInput.value), " px");
+    scheduleLiveTargetPatch(
+      { edge_feather_radius: Number(edgeFeatherRadiusInput.value) },
+      "Refreshing feathered edge preview...",
+      () => "Edge feather updated."
     );
   });
 

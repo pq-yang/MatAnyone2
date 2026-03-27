@@ -25,6 +25,21 @@ def test_export_assets_creates_png_zip_even_when_prores_fails(tmp_path, monkeypa
     )
     monkeypatch.setattr(
         service,
+        "_process_alpha_frames",
+        lambda *args, **kwargs: [np.full((4, 4), 128, dtype=np.uint8)],
+    )
+    monkeypatch.setattr(
+        service,
+        "_overwrite_alpha_frames",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        service,
+        "_write_alpha_video",
+        lambda *args, **kwargs: tmp_path / "alpha.mp4",
+    )
+    monkeypatch.setattr(
+        service,
         "_write_rgba_pngs",
         lambda *args, **kwargs: tmp_path / "rgba_png",
     )
@@ -133,3 +148,15 @@ def test_stabilize_alpha_frames_blends_adjacent_frames():
 
     assert stabilized[0].shape == (4, 4)
     assert 0 < int(stabilized[1].mean()) < 255
+
+
+def test_apply_edge_feather_softens_mask_boundary():
+    service = ExportService(enable_prores=False)
+    alpha = np.zeros((9, 9), dtype=np.uint8)
+    alpha[2:7, 2:7] = 255
+
+    feathered = service._apply_edge_feather(alpha, feather_radius=5.0)
+
+    assert feathered[1, 2] > 0
+    assert feathered[0, 0] == 0
+    assert feathered[4, 4] == 255
