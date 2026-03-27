@@ -166,7 +166,7 @@ class DesktopWorkbenchController:
         self.session.selected_mask_names = set(mask_names)
         return self.current_state()
 
-    def submit_job(self, job_dir: Path) -> dict:
+    def submit_job(self, job_dir: Path, progress_callback=None) -> dict:
         if self.inference_service is None or self.export_service is None:
             raise RuntimeError("inference/export services are not configured")
 
@@ -184,6 +184,8 @@ class DesktopWorkbenchController:
         }
         selected_mask_controls = self._selected_mask_controls(selected_masks)
 
+        if progress_callback is not None:
+            progress_callback("Running MatAnyone2", 35, True)
         inference_result = self.inference_service.run_job(
             source_video_path=self.draft.video_path,
             mask_path=merged_mask_path,
@@ -194,6 +196,8 @@ class DesktopWorkbenchController:
             selected_mask_controls=selected_mask_controls,
             selected_mask_presets=selected_mask_presets,
         )
+        if progress_callback is not None:
+            progress_callback("Exporting foreground and alpha", 80, True)
         export_result = self.export_service.export_assets(
             inference_result.foreground_video_path,
             inference_result.alpha_video_path,
@@ -211,6 +215,8 @@ class DesktopWorkbenchController:
                 default=0.0,
             ),
         )
+        if progress_callback is not None:
+            progress_callback("Packaging outputs", 95, False)
         job_id = uuid.uuid4().hex
         self.session.latest_job_id = job_id
         self.session.workflow_step = "review"

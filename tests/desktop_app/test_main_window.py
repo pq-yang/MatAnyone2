@@ -3,6 +3,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from PIL import Image
+from PySide6.QtCore import Qt
 
 from matanyone2.desktop_app.config import DesktopAppConfig
 from matanyone2.desktop_app.main_window import DesktopWorkbenchWindow
@@ -144,6 +145,39 @@ def test_main_window_exposes_explicit_subject_selection_toolbar(qapp, tmp_path: 
     assert window.select_subject_button.isChecked() is True
 
 
+def test_select_subject_uses_crosshair_cursor(qapp, tmp_path: Path):
+    window = DesktopWorkbenchWindow(
+        config=DesktopAppConfig.for_root(tmp_path),
+        initial_state=_state_for_step("mask"),
+    )
+
+    window._set_interaction_mode("positive")
+
+    assert window.monitor.surface.cursor().shape() == Qt.CrossCursor
+
+
+def test_brush_mode_switches_cursor_away_from_arrow(qapp, tmp_path: Path):
+    window = DesktopWorkbenchWindow(
+        config=DesktopAppConfig.for_root(tmp_path),
+        initial_state=_state_for_step("refine"),
+    )
+
+    window._set_interaction_mode("brush_add")
+
+    assert window.monitor.surface.cursor().shape() != Qt.ArrowCursor
+
+
+def test_main_window_has_status_dock_sections(qapp, tmp_path: Path):
+    window = DesktopWorkbenchWindow(
+        config=DesktopAppConfig.for_root(tmp_path),
+        initial_state=_state_for_step("mask"),
+    )
+
+    assert window.status_dock.current_state_label.text()
+    assert window.status_dock.system_activity_label.text()
+    assert window.status_dock.next_action_label.text()
+
+
 def test_main_window_prefers_refine_tab_during_refine_step(qapp, tmp_path: Path):
     window = DesktopWorkbenchWindow(
         config=DesktopAppConfig.for_root(tmp_path),
@@ -235,3 +269,19 @@ def test_mask_hint_guides_user_to_overlay_mask_and_save(qapp, tmp_path: Path):
     assert "overlay" in hint
     assert "mask" in hint
     assert "save target" in hint
+
+
+def test_monitor_click_updates_status_dock_to_overlay_guidance(qapp, tmp_path: Path):
+    controller = _build_controller(tmp_path)
+    config = DesktopAppConfig.for_root(tmp_path)
+    video_path = _create_sample_video(tmp_path / "sample.mp4")
+    window = DesktopWorkbenchWindow(config=config, controller=controller)
+    window.load_video_file(video_path)
+
+    window.select_subject_button.click()
+    window._on_monitor_clicked(4, 4)
+
+    assert window.current_view_mode == "overlay"
+    assert "mask updated" in window.status_dock.current_state_label.text().lower()
+    assert "overlay refreshed" in window.status_dock.system_activity_label.text().lower()
+    assert "save target" in window.status_dock.next_action_label.text().lower()

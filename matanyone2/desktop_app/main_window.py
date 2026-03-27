@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QFileDialog,
@@ -28,7 +29,7 @@ from matanyone2.desktop_app.config import DesktopAppConfig
 from matanyone2.desktop_app.jobs import DesktopJobHandle
 from matanyone2.desktop_app.media import VideoFrameStore
 from matanyone2.desktop_app.session_controller import DesktopSessionState, DesktopWorkbenchController
-from matanyone2.desktop_app.widgets import MonitorPane, TimelineDock
+from matanyone2.desktop_app.widgets import MonitorPane, StatusDock, TimelineDock
 
 
 class DesktopWorkbenchWindow(QMainWindow):
@@ -57,6 +58,9 @@ class DesktopWorkbenchWindow(QMainWindow):
         self.pending_out_frame = 0
         self.current_interaction_mode = "positive"
         self.current_job_handle: DesktopJobHandle | None = None
+        self.status_current_state = "Idle"
+        self.status_system_activity = "Open a video to begin"
+        self.status_next_action = "Open a video from the toolbar"
         self.playback_timer = QTimer(self)
         self.playback_timer.timeout.connect(self._advance_playback)
 
@@ -173,6 +177,9 @@ class DesktopWorkbenchWindow(QMainWindow):
 
         self.timeline_dock = TimelineDock()
         center_layout.addWidget(self.timeline_dock, 0)
+
+        self.status_dock = StatusDock()
+        center_layout.addWidget(self.status_dock, 0)
         outer.addWidget(center, 1)
 
         self.mark_in_button = self.timeline_dock.mark_in_button
@@ -375,6 +382,7 @@ class DesktopWorkbenchWindow(QMainWindow):
         self._sync_action_states()
         self._update_timeline_labels()
         self._sync_interaction_hint()
+        self._sync_status_feedback()
 
     def _sync_target_list(self) -> None:
         self.target_list.blockSignals(True)
@@ -439,6 +447,7 @@ class DesktopWorkbenchWindow(QMainWindow):
             button.setEnabled(can_edit)
         self.interaction_mode.setEnabled(can_edit)
         self.interaction_hint_label.setVisible(can_begin_selection)
+        self._sync_monitor_activation(can_edit=can_edit, can_begin_selection=can_begin_selection)
 
     def _preferred_sidebar_tab(self) -> str:
         if self.state.workflow_step == "review":
@@ -534,6 +543,12 @@ class DesktopWorkbenchWindow(QMainWindow):
     def _apply_anchor_from_slider(self) -> None:
         if self.controller is None:
             return
+        self._set_status_feedback(
+            current_state="Anchor Updating",
+            system_activity=f"Applying frame {self.anchor_timeline.value()} as the mask anchor",
+            next_action="Wait for the monitor to refresh",
+        )
+        QApplication.processEvents()
         self.state = self.controller.apply_anchor(frame_index=self.anchor_timeline.value())
         self.current_playhead_frame = int(self.state.template_frame_index or self.current_playhead_frame)
         self._sync_state_to_ui()
@@ -552,6 +567,12 @@ class DesktopWorkbenchWindow(QMainWindow):
             return
         start = min(self.pending_in_frame, self.pending_out_frame)
         end = max(self.pending_in_frame, self.pending_out_frame)
+        self._set_status_feedback(
+            current_state="Clip Updating",
+            system_activity=f"Applying processing range {start}-{end}",
+            next_action="Wait for the clip range to refresh",
+        )
+        QApplication.processEvents()
         self.state = self.controller.apply_processing_range(start_frame_index=start, end_frame_index=end)
         self.current_playhead_frame = start
         self._set_view_mode("source")
@@ -563,6 +584,12 @@ class DesktopWorkbenchWindow(QMainWindow):
             return
         self.pending_in_frame = 0
         self.pending_out_frame = self.source_store.frame_count - 1
+        self._set_status_feedback(
+            current_state="Clip Reset",
+            system_activity="Restoring the whole clip as the active range",
+            next_action="Drag the anchor or click Select Subject to start from frame 0",
+        )
+        QApplication.processEvents()
         self.state = self.controller.apply_processing_range(
             start_frame_index=0,
             end_frame_index=self.source_store.frame_count - 1,
@@ -604,6 +631,12 @@ class DesktopWorkbenchWindow(QMainWindow):
         if self.controller is None or self.state.workflow_step == "review":
             return
         if self.state.workflow_step == "clip":
+            self._set_status_feedback(
+                current_state="Mask Preparing",
+                system_activity="Defaulting the anchor to the active range start",
+                next_action="Wait for selection mode to activate",
+            )
+            QApplication.processEvents()
             self.state = self.controller.ensure_anchor_for_masking()
             self.current_playhead_frame = int(
                 self.state.template_frame_index
@@ -611,18 +644,30 @@ class DesktopWorkbenchWindow(QMainWindow):
                 else self.state.process_start_frame_index
             )
             self._sync_state_to_ui()
+        self._set_status_feedback(
+            current_state="Selection Active",
+            system_activity=f"Click received at ({x}, {y})",
+            next_action="Updating the mask...",
+        )
+        QApplication.processEvents()
         if self.current_interaction_mode == "positive":
             self.controller.apply_click(x=x, y=y, positive=True)
         elif self.current_interaction_mode == "negative":
             self.controller.apply_click(x=x, y=y, positive=False)
         self.state = self.controller.current_state()
-        self._sync_state_to_ui()
         self._set_view_mode("overlay")
+        self._sync_state_to_ui()
 
     def _on_monitor_stroke(self, points: list[tuple[int, int]]) -> None:
         if self.controller is None or self.state.workflow_step == "review":
             return
         if self.state.workflow_step == "clip":
+            self._set_status_feedback(
+                current_state="Mask Preparing",
+                system_activity="Defaulting the anchor to the active range start",
+                next_action="Wait for brush refinement to unlock",
+            )
+            QApplication.processEvents()
             self.state = self.controller.ensure_anchor_for_masking()
             self.current_playhead_frame = int(
                 self.state.template_frame_index
@@ -638,10 +683,16 @@ class DesktopWorkbenchWindow(QMainWindow):
         brush_mode = mode_map.get(self.current_interaction_mode)
         if brush_mode is None or not points:
             return
+        self._set_status_feedback(
+            current_state="Refine Active",
+            system_activity=f"{self._tool_display_name()} stroke received",
+            next_action="Updating the overlay...",
+        )
+        QApplication.processEvents()
         self.controller.apply_brush(points=points, mode=brush_mode, radius=int(self.brush_size_slider.value()))
         self.state = self.controller.current_state()
-        self._sync_state_to_ui()
         self._set_view_mode("overlay")
+        self._sync_state_to_ui()
 
     def _new_target(self) -> None:
         if self.controller is None:
@@ -690,6 +741,12 @@ class DesktopWorkbenchWindow(QMainWindow):
 
     def _on_toolbar_interaction_selected(self, mode: str) -> None:
         if self.controller is not None and self.state.workflow_step == "clip":
+            self._set_status_feedback(
+                current_state="Mask Preparing",
+                system_activity="Defaulting the anchor to the active range start",
+                next_action="Wait for selection mode to activate",
+            )
+            QApplication.processEvents()
             self.state = self.controller.ensure_anchor_for_masking()
             self.current_playhead_frame = int(
                 self.state.template_frame_index
@@ -714,8 +771,10 @@ class DesktopWorkbenchWindow(QMainWindow):
             self.interaction_mode.setCurrentIndex(index)
             self.interaction_mode.blockSignals(False)
         self.monitor.surface.set_brush_enabled(self.current_interaction_mode.startswith("brush_"))
+        self.monitor.surface.set_interaction_cursor(self.current_interaction_mode)
         self._sync_interaction_toolbar()
         self._sync_interaction_hint()
+        self._sync_status_feedback()
 
     def _sync_interaction_toolbar(self) -> None:
         for mode, button in self.interaction_toolbar_buttons.items():
@@ -758,6 +817,130 @@ class DesktopWorkbenchWindow(QMainWindow):
             message = "Select Subject is active. Click the monitor to tag the active person or object."
         self.interaction_hint_label.setText(message)
 
+    def _sync_monitor_activation(self, *, can_edit: bool, can_begin_selection: bool) -> None:
+        is_live_step = self.state.workflow_step in {"clip", "mask", "refine"}
+        if not is_live_step:
+            self.monitor.surface.set_monitor_active(False)
+            self.monitor.surface.set_interaction_cursor("idle")
+            self.monitor.surface.set_brush_enabled(False)
+            return
+        if self.current_interaction_mode.startswith("brush_"):
+            armed = can_edit
+        else:
+            armed = can_begin_selection
+        self.monitor.surface.set_monitor_active(armed)
+        if armed:
+            self.monitor.surface.set_interaction_cursor(self.current_interaction_mode)
+        else:
+            self.monitor.surface.set_interaction_cursor("idle")
+
+    def _tool_display_name(self) -> str:
+        return {
+            "positive": "Select Subject",
+            "negative": "Exclude",
+            "brush_add": "Brush Add",
+            "brush_remove": "Brush Remove",
+            "brush_feather": "Brush Feather",
+        }.get(self.current_interaction_mode, "Select Subject")
+
+    def _set_status_feedback(
+        self,
+        *,
+        current_state: str,
+        system_activity: str,
+        next_action: str,
+        progress_visible: bool = False,
+        progress_indeterminate: bool = False,
+        progress_value: int | None = None,
+    ) -> None:
+        self.status_current_state = current_state
+        self.status_system_activity = system_activity
+        self.status_next_action = next_action
+        self.status_dock.set_status(
+            current_state=current_state,
+            system_activity=system_activity,
+            next_action=next_action,
+            progress_visible=progress_visible,
+            progress_indeterminate=progress_indeterminate,
+            progress_value=progress_value,
+        )
+        tool = self._tool_display_name()
+        self.session_status_label.setText(
+            f"Step: {self.state.workflow_step.title()} | Target: {self.state.active_target_name} | Tool: {tool} | {system_activity}"
+        )
+
+    def _sync_status_feedback(self) -> None:
+        if self.controller is None or self.source_store is None:
+            self._set_status_feedback(
+                current_state="Idle",
+                system_activity="Open a video to begin",
+                next_action="Open a video from the toolbar",
+            )
+            return
+        if self.current_job_handle is not None:
+            self._set_status_feedback(
+                current_state="Review Pending",
+                system_activity=self.status_system_activity,
+                next_action=self.status_next_action,
+                progress_visible=True,
+                progress_indeterminate=True,
+            )
+            return
+        if self.state.workflow_step == "clip":
+            if self.state.template_frame_index is None:
+                self._set_status_feedback(
+                    current_state="Clip Ready",
+                    system_activity="Whole clip active" if self._is_full_clip_range() else "Trimmed range active",
+                    next_action="Drag anchor or click Select Subject to default to the range start",
+                )
+            else:
+                self._set_status_feedback(
+                    current_state="Anchor Ready",
+                    system_activity=f"Anchor set to frame {self.state.template_frame_index}",
+                    next_action="Move to Mask or click the monitor to start selecting",
+                )
+            return
+        if self.state.workflow_step == "review":
+            self._set_status_feedback(
+                current_state="Review Ready",
+                system_activity="Processed outputs are available",
+                next_action="Inspect Alpha, Foreground, or open the output folder",
+            )
+            return
+        if self.state.current_mask_path is not None and self.current_view_mode == "mask":
+            self._set_status_feedback(
+                current_state="Inspecting Mask",
+                system_activity="Live matte view is active",
+                next_action="Return to Overlay or save the target when the matte looks right",
+            )
+            return
+        if self.state.current_preview_path is not None and self.current_view_mode == "overlay":
+            self._set_status_feedback(
+                current_state="Mask Updated",
+                system_activity="Overlay refreshed",
+                next_action="Keep selecting, inspect Mask, or Save Target",
+            )
+            return
+        if self.current_interaction_mode == "negative":
+            self._set_status_feedback(
+                current_state="Selection Active",
+                system_activity="Exclude tool armed",
+                next_action="Click background or distractions in the monitor",
+            )
+            return
+        if self.current_interaction_mode.startswith("brush_"):
+            self._set_status_feedback(
+                current_state="Refine Active",
+                system_activity=f"{self._tool_display_name()} armed",
+                next_action="Drag on the monitor to adjust the matte edge",
+            )
+            return
+        self._set_status_feedback(
+            current_state="Selection Active",
+            system_activity="Select Subject ready for click",
+            next_action="Click the person or object in the monitor",
+        )
+
     def _on_refine_controls_changed(self) -> None:
         if self.controller is None:
             return
@@ -791,6 +974,12 @@ class DesktopWorkbenchWindow(QMainWindow):
     def _save_target(self) -> None:
         if self.controller is None:
             return
+        self._set_status_feedback(
+            current_state="Saving Target",
+            system_activity="Persisting the current matte as a saved target",
+            next_action="Wait for the export list to refresh",
+        )
+        QApplication.processEvents()
         self.controller.save_active_target()
         self.state = self.controller.current_state()
         self._sync_state_to_ui()
@@ -811,9 +1000,36 @@ class DesktopWorkbenchWindow(QMainWindow):
             return
         self.export_status_label.setText("Running MatAnyone2...")
         self.current_job_handle = DesktopJobHandle(self.controller, self.config.runtime_root)
+        self.current_job_handle.progress.connect(self._on_job_progress)
         self.current_job_handle.finished.connect(self._on_job_finished)
         self.current_job_handle.failed.connect(self._on_job_failed)
+        self._set_status_feedback(
+            current_state="Review Pending",
+            system_activity="Preparing session",
+            next_action="Wait while MatAnyone2 starts processing",
+            progress_visible=True,
+            progress_indeterminate=True,
+        )
         self.current_job_handle.start()
+
+    def _on_job_progress(self, stage: str, value: int, indeterminate: bool) -> None:
+        next_action = "Wait for processing to complete"
+        if stage == "Preparing session":
+            next_action = "The worker is validating inputs and building the job"
+        elif stage == "Running MatAnyone2":
+            next_action = "Alpha and foreground are being generated"
+        elif stage == "Exporting foreground and alpha":
+            next_action = "Outputs are being encoded for review"
+        elif stage == "Packaging outputs":
+            next_action = "Final deliverables are being assembled"
+        self._set_status_feedback(
+            current_state="Review Pending",
+            system_activity=stage,
+            next_action=next_action,
+            progress_visible=True,
+            progress_indeterminate=indeterminate,
+            progress_value=value,
+        )
 
     def _on_job_finished(self, payload: dict) -> None:
         self.current_job_handle = None
@@ -828,6 +1044,11 @@ class DesktopWorkbenchWindow(QMainWindow):
     def _on_job_failed(self, message: str) -> None:
         self.current_job_handle = None
         self.export_status_label.setText(f"Failed: {message}")
+        self._set_status_feedback(
+            current_state="Review Failed",
+            system_activity=message,
+            next_action="Adjust the target or export settings, then run MatAnyone2 again",
+        )
         QMessageBox.critical(self, "MatAnyone2 Job Failed", message)
 
     def _open_output_folder(self) -> None:

@@ -9,6 +9,7 @@ from matanyone2.desktop_app.session_controller import DesktopWorkbenchController
 class DesktopJobWorker(QObject):
     finished = Signal(dict)
     failed = Signal(str)
+    progress = Signal(str, int, bool)
 
     def __init__(self, controller: DesktopWorkbenchController, runtime_root: Path):
         super().__init__()
@@ -18,7 +19,8 @@ class DesktopJobWorker(QObject):
     def run(self) -> None:
         job_dir = self.runtime_root / "jobs" / uuid4().hex
         try:
-            payload = self.controller.submit_job(job_dir)
+            self.progress.emit("Preparing session", 5, False)
+            payload = self.controller.submit_job(job_dir, progress_callback=self.progress.emit)
         except Exception as exc:  # pragma: no cover - exercised in manual flows
             self.failed.emit(str(exc))
             return
@@ -28,6 +30,7 @@ class DesktopJobWorker(QObject):
 class DesktopJobHandle(QObject):
     finished = Signal(dict)
     failed = Signal(str)
+    progress = Signal(str, int, bool)
 
     def __init__(self, controller: DesktopWorkbenchController, runtime_root: Path):
         super().__init__()
@@ -35,6 +38,7 @@ class DesktopJobHandle(QObject):
         self.worker = DesktopJobWorker(controller, runtime_root)
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
+        self.worker.progress.connect(self.progress.emit)
         self.worker.finished.connect(self._on_finished)
         self.worker.failed.connect(self._on_failed)
 

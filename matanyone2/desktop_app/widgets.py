@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QProgressBar,
     QPushButton,
     QSlider,
     QVBoxLayout,
@@ -29,6 +30,7 @@ class MonitorCanvas(QLabel):
         self._display_rect: tuple[int, int, int, int] | None = None
         self._brush_enabled = False
         self._stroke_points: list[tuple[int, int]] = []
+        self._monitor_active = False
 
     def set_numpy_image(self, image: np.ndarray | None) -> None:
         if image is None:
@@ -63,6 +65,21 @@ class MonitorCanvas(QLabel):
         self._brush_enabled = enabled
         if not enabled:
             self._stroke_points = []
+
+    def set_interaction_cursor(self, mode: str) -> None:
+        if mode in {"positive", "negative"}:
+            self.setCursor(Qt.CrossCursor)
+        elif mode.startswith("brush_"):
+            self.setCursor(Qt.PointingHandCursor)
+        else:
+            self.unsetCursor()
+
+    def set_monitor_active(self, active: bool) -> None:
+        self._monitor_active = active
+        border = "#33b6ff" if active else "#1b2634"
+        self.setStyleSheet(
+            f"background:#060a12;border:2px solid {border};border-radius:12px;color:#9db2ca;"
+        )
 
     def resizeEvent(self, event):  # noqa: N802
         super().resizeEvent(event)
@@ -195,6 +212,55 @@ class TimelineDock(QFrame):
         self.anchor_timeline.setObjectName("anchorTimeline")
         self.anchor_timeline.setEnabled(False)
         root.addWidget(self.anchor_timeline)
+
+
+class StatusDock(QFrame):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("statusDock")
+        self.setFrameShape(QFrame.StyledPanel)
+        root = QHBoxLayout(self)
+        root.setContentsMargins(12, 10, 12, 10)
+        root.setSpacing(12)
+
+        self.current_state_label = QLabel("Current State: Idle")
+        self.system_activity_label = QLabel("System: Ready")
+        self.next_action_label = QLabel("Next: Open a video to begin")
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setMinimumWidth(140)
+        self.progress_bar.setMaximumWidth(220)
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setRange(0, 1)
+        self.progress_bar.setValue(0)
+        self.progress_bar.hide()
+
+        root.addWidget(self.current_state_label)
+        root.addWidget(self.system_activity_label, 1)
+        root.addWidget(self.next_action_label, 1)
+        root.addWidget(self.progress_bar)
+
+    def set_status(
+        self,
+        *,
+        current_state: str,
+        system_activity: str,
+        next_action: str,
+        progress_visible: bool = False,
+        progress_indeterminate: bool = False,
+        progress_value: int | None = None,
+    ) -> None:
+        self.current_state_label.setText(f"Current State: {current_state}")
+        self.system_activity_label.setText(f"System: {system_activity}")
+        self.next_action_label.setText(f"Next: {next_action}")
+        if progress_visible:
+            if progress_indeterminate:
+                self.progress_bar.setRange(0, 0)
+            else:
+                self.progress_bar.setRange(0, 100)
+                self.progress_bar.setValue(0 if progress_value is None else progress_value)
+            self.progress_bar.show()
+        else:
+            self.progress_bar.hide()
 
 
 class InspectorPlaceholder(QWidget):
