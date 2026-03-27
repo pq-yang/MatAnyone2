@@ -167,6 +167,15 @@ Current outputs:
 - `rgba_png.zip`
 - `output_prores4444.mov`
 
+The internal web app now uses `SAM2.1` as the default first-frame interactive segmentation backend for the annotation workbench, while `MatAnyone2` remains the video matting backend after submission. You can still override the segmentation backend or checkpoint at launch time:
+
+```powershell
+$env:MATANYONE2_WEBAPP_SAM_BACKEND = "sam2"
+$env:MATANYONE2_WEBAPP_SAM2_VARIANT = "sam2.1_hiera_large"
+# optional: point to an existing local checkpoint instead of downloading into pretrained_models
+$env:MATANYONE2_WEBAPP_SAM2_CHECKPOINT_PATH = "D:\models\sam2.1_hiera_large.pt"
+```
+
 Run the web server:
 
 ```shell

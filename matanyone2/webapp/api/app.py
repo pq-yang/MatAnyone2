@@ -26,7 +26,10 @@ def create_app(settings=None) -> FastAPI:
     )
     app.state.masking_service = MaskingService(
         runtime_root=settings.runtime_root,
+        sam_backend=settings.sam_backend,
         sam_model_type=settings.sam_model_type,
+        sam2_variant=settings.sam2_variant,
+        sam2_checkpoint_path=settings.sam2_checkpoint_path,
     )
     app.state.drafts = {}
     app.state.templates = Jinja2Templates(directory="matanyone2/webapp/templates")

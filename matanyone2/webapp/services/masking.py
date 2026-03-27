@@ -1,10 +1,34 @@
 import numpy as np
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from matanyone2.webapp.models import AnnotationTarget, DraftRecord, DraftSession, MaskingResult
 from matanyone2.webapp.runtime_paths import ensure_dir
+
+
+SAM2_CHECKPOINTS = {
+    "sam2.1_hiera_tiny": {
+        "config": "configs/sam2.1/sam2.1_hiera_t.yaml",
+        "filename": "sam2.1_hiera_tiny.pt",
+        "url": "https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_tiny.pt",
+    },
+    "sam2.1_hiera_small": {
+        "config": "configs/sam2.1/sam2.1_hiera_s.yaml",
+        "filename": "sam2.1_hiera_small.pt",
+        "url": "https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_small.pt",
+    },
+    "sam2.1_hiera_base_plus": {
+        "config": "configs/sam2.1/sam2.1_hiera_b+.yaml",
+        "filename": "sam2.1_hiera_base_plus.pt",
+        "url": "https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_base_plus.pt",
+    },
+    "sam2.1_hiera_large": {
+        "config": "configs/sam2.1/sam2.1_hiera_l.yaml",
+        "filename": "sam2.1_hiera_large.pt",
+        "url": "https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.pt",
+    },
+}
 
 
 def merge_masks(masks: list[np.ndarray]) -> np.ndarray:
@@ -34,6 +58,46 @@ class SamMaskController:
         )
 
 
+def _render_mask_preview(image: np.ndarray, mask: np.ndarray, points, labels) -> Image.Image:
+    base = Image.fromarray(image.astype(np.uint8), mode="RGB").convert("RGBA")
+    overlay = np.zeros((mask.shape[0], mask.shape[1], 4), dtype=np.uint8)
+    overlay[mask > 0] = np.array([110, 132, 255, 118], dtype=np.uint8)
+    composite = Image.alpha_composite(base, Image.fromarray(overlay, mode="RGBA"))
+    draw = ImageDraw.Draw(composite)
+
+    for (x, y), label in zip(points.tolist(), labels.tolist()):
+        color = (118, 230, 136, 255) if label == 1 else (232, 105, 196, 255)
+        outline = (255, 143, 96, 255)
+        draw.ellipse((x - 8, y - 8, x + 8, y + 8), fill=outline)
+        draw.ellipse((x - 5, y - 5, x + 5, y + 5), fill=color)
+
+    return composite.convert("RGB")
+
+
+class Sam2MaskController:
+    def __init__(self, predictor):
+        self._predictor = predictor
+
+    def first_frame_click(self, image, points, labels, multimask=True):
+        self._predictor.set_image(image)
+        masks, scores, _ = self._predictor.predict(
+            point_coords=points,
+            point_labels=labels,
+            multimask_output=multimask,
+        )
+
+        masks = np.asarray(masks)
+        scores = np.asarray(scores)
+        if masks.ndim == 3:
+            best_index = int(np.argmax(scores)) if scores.size else 0
+            mask = masks[best_index]
+        else:
+            mask = masks
+        mask = mask.astype(np.uint8)
+        painted_image = _render_mask_preview(image, mask, points, labels)
+        return mask, scores, painted_image
+
+
 class MaskingService:
     VALID_STAGES = {"coarse", "refine", "preview"}
 
@@ -42,11 +106,17 @@ class MaskingService:
         *,
         runtime_root: Path,
         controller_factory=None,
+        sam_backend: str = "sam2",
         sam_model_type: str = "vit_h",
+        sam2_variant: str = "sam2.1_hiera_large",
+        sam2_checkpoint_path: str | None = None,
     ):
         self.runtime_root = Path(runtime_root)
         self.controller_factory = controller_factory
+        self.sam_backend = sam_backend
         self.sam_model_type = sam_model_type
+        self.sam2_variant = sam2_variant
+        self.sam2_checkpoint_path = sam2_checkpoint_path
         self._controller = None
 
     def create_session(self, draft: DraftRecord) -> DraftSession:
@@ -189,6 +259,13 @@ class MaskingService:
         return self._controller
 
     def _build_default_controller(self):
+        if self.sam_backend == "sam2":
+            return self._build_sam2_controller()
+        if self.sam_backend == "sam1":
+            return self._build_sam1_controller()
+        raise ValueError(f"unknown sam backend: {self.sam_backend}")
+
+    def _build_sam1_controller(self):
         from hugging_face.tools.download_util import load_file_from_url
         from hugging_face.tools.misc import get_device
 
@@ -206,3 +283,35 @@ class MaskingService:
             model_type=self.sam_model_type,
             device=str(get_device()),
         )
+
+    def _build_sam2_controller(self):
+        from hugging_face.tools.download_util import load_file_from_url
+        from hugging_face.tools.misc import get_device
+
+        try:
+            from sam2.build_sam import build_sam2
+            from sam2.sam2_image_predictor import SAM2ImagePredictor
+        except ImportError as exc:
+            raise RuntimeError(
+                "SAM2 backend is selected but the 'SAM-2' package is not installed"
+            ) from exc
+
+        variant = SAM2_CHECKPOINTS.get(self.sam2_variant)
+        if variant is None:
+            raise ValueError(f"unknown SAM2 variant: {self.sam2_variant}")
+
+        checkpoint_path = self.sam2_checkpoint_path
+        if checkpoint_path is None:
+            checkpoint_path = load_file_from_url(
+                variant["url"],
+                model_dir=str(Path("pretrained_models")),
+            )
+
+        predictor = SAM2ImagePredictor(
+            build_sam2(
+                variant["config"],
+                checkpoint_path,
+                device=str(get_device()),
+            )
+        )
+        return Sam2MaskController(predictor)
