@@ -167,6 +167,19 @@ Current outputs:
 - `rgba_png.zip`
 - `output_prores4444.mov`
 
+### Annotation Workbench
+
+The current workbench is a single-page desktop UI built around `SAM2.1 -> first-frame mask -> MatAnyone2 video matting`.
+
+Workbench capabilities:
+
+- multi-target layer management
+- `Positive / Negative` point placement
+- `Balanced / Hair / Edge / Motion` refine presets
+- `Add / Remove / Feather` brush cleanup
+- `Source / Overlay / Mask` review modes
+- export-mask selection before queue submission
+
 The internal web app now uses `SAM2.1` as the default first-frame interactive segmentation backend for the annotation workbench, while `MatAnyone2` remains the video matting backend after submission. You can still override the segmentation backend or checkpoint at launch time:
 
 ```powershell
@@ -176,7 +189,28 @@ $env:MATANYONE2_WEBAPP_SAM2_VARIANT = "sam2.1_hiera_large"
 $env:MATANYONE2_WEBAPP_SAM2_CHECKPOINT_PATH = "D:\models\sam2.1_hiera_large.pt"
 ```
 
-Run the web server:
+### Start For Testing
+
+Recommended on Windows:
+
+```powershell
+.\scripts\start_internal_webapp.ps1
+```
+
+Open:
+
+```text
+http://127.0.0.1:8010
+```
+
+Check or stop the service:
+
+```powershell
+.\scripts\check_internal_webapp.ps1
+.\scripts\stop_internal_webapp.ps1
+```
+
+Manual split-process launch is still available:
 
 ```shell
 python scripts/run_internal_webapp.py
@@ -187,6 +221,17 @@ Run the worker in a separate process:
 ```shell
 python scripts/run_internal_worker.py
 ```
+
+### Quick Test Path
+
+1. Upload a short clip.
+2. Use positive and negative clicks to isolate the person.
+3. Switch the preset to `Hair`, `Edge`, `Motion`, or `Balanced` based on the edge you care about.
+4. Use `Add / Remove / Feather` to manually correct the first-frame mask.
+5. Save one or more targets, choose which saved masks to export, and submit the job.
+6. Review `Overlay / Alpha / Foreground` on the result page before downloading artifacts.
+
+### Smoke Test
 
 Run an end-to-end smoke test that launches the web app, launches the worker, submits two back-to-back jobs, and verifies queueing plus artifact export:
 
@@ -203,7 +248,7 @@ Windows one-click helpers are also available:
 .\scripts\smoke_internal_webapp.ps1 --copies 2
 ```
 
-The smoke flow submits jobs through the same HTTP workflow used by the UI and verifies that the queue reaches a completed result with generated artifacts.
+The smoke flow submits jobs through the same HTTP workflow used by the UI, carries the active SAM backend settings into the temporary service environment, and verifies that the queue reaches a completed result with generated artifacts.
 
 ## 📊 Evaluation
 Please refer to the [evaluation documentation](docs/EVAL.md) for details.

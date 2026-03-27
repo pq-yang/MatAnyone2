@@ -163,10 +163,22 @@ def build_service_env(runtime_root: Path, *, enable_prores: bool) -> dict[str, s
     env["MATANYONE2_WEBAPP_RUNTIME_ROOT"] = str(runtime_root)
     env["MATANYONE2_WEBAPP_DATABASE_PATH"] = str(runtime_root / "jobs.db")
     env["MATANYONE2_WEBAPP_ENABLE_PRORES"] = "1" if enable_prores else "0"
-    env["MATANYONE2_WEBAPP_SAM_MODEL_TYPE"] = env.get(
-        "MATANYONE2_WEBAPP_SAM_MODEL_TYPE",
-        "vit_h",
+    env["MATANYONE2_WEBAPP_SAM_BACKEND"] = env.get(
+        "MATANYONE2_WEBAPP_SAM_BACKEND",
+        "sam2",
     )
+    if "MATANYONE2_WEBAPP_SAM_MODEL_TYPE" in os.environ:
+        env["MATANYONE2_WEBAPP_SAM_MODEL_TYPE"] = os.environ[
+            "MATANYONE2_WEBAPP_SAM_MODEL_TYPE"
+        ]
+    if "MATANYONE2_WEBAPP_SAM2_VARIANT" in os.environ:
+        env["MATANYONE2_WEBAPP_SAM2_VARIANT"] = os.environ[
+            "MATANYONE2_WEBAPP_SAM2_VARIANT"
+        ]
+    if "MATANYONE2_WEBAPP_SAM2_CHECKPOINT_PATH" in os.environ:
+        env["MATANYONE2_WEBAPP_SAM2_CHECKPOINT_PATH"] = os.environ[
+            "MATANYONE2_WEBAPP_SAM2_CHECKPOINT_PATH"
+        ]
     env["PYTHONIOENCODING"] = "utf-8"
     return env
 
