@@ -42,8 +42,19 @@ class ExportService:
             temporal_stability=temporal_stability,
         )
         png_zip_path = self._zip_directory(rgba_png_dir, job_dir / "rgba_png.zip")
+        preview_foreground_path = None
+        preview_alpha_path = None
 
         warning_text = None
+        try:
+            preview_foreground_path, preview_alpha_path = self._export_preview_videos(
+                foreground_video_path,
+                alpha_video_path,
+                job_dir,
+            )
+        except RuntimeError as exc:
+            warning_text = str(exc)
+
         prores_path = None
         if self.enable_prores:
             try:
@@ -53,11 +64,13 @@ class ExportService:
                     fps=fps,
                 )
             except RuntimeError as exc:
-                warning_text = str(exc)
+                warning_text = self._merge_warning_text(warning_text, str(exc))
 
         return ExportResult(
             rgba_png_dir=rgba_png_dir,
             png_zip_path=png_zip_path,
+            preview_foreground_path=preview_foreground_path,
+            preview_alpha_path=preview_alpha_path,
             prores_path=prores_path,
             warning_text=warning_text,
         )
@@ -188,6 +201,55 @@ class ExportService:
                     archive.write(path, arcname=path.relative_to(source_dir))
         return zip_path
 
+    def _export_preview_videos(
+        self,
+        foreground_video_path: Path,
+        alpha_video_path: Path,
+        job_dir: Path,
+    ) -> tuple[Path, Path]:
+        ffmpeg_binary = shutil.which("ffmpeg")
+        if ffmpeg_binary is None:
+            raise RuntimeError("ffmpeg is not installed")
+
+        preview_foreground_path = job_dir / "preview_foreground.mp4"
+        preview_alpha_path = job_dir / "preview_alpha.mp4"
+        self._export_browser_preview_video(
+            ffmpeg_binary,
+            foreground_video_path,
+            preview_foreground_path,
+        )
+        self._export_browser_preview_video(
+            ffmpeg_binary,
+            alpha_video_path,
+            preview_alpha_path,
+        )
+        return preview_foreground_path, preview_alpha_path
+
+    def _export_browser_preview_video(
+        self,
+        ffmpeg_binary: str,
+        input_path: Path,
+        output_path: Path,
+    ) -> Path:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        command = [
+            ffmpeg_binary,
+            "-y",
+            "-i",
+            str(input_path),
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
+            str(output_path),
+        ]
+        self._run_ffmpeg_command(command)
+        if not output_path.exists():
+            raise RuntimeError(f"ffmpeg did not produce browser preview output: {output_path.name}")
+        return output_path
+
     def _export_prores(self, rgba_png_dir: Path, output_path: Path, *, fps: float) -> Path:
         first_frame = rgba_png_dir / "0000.png"
         if not first_frame.exists():
@@ -228,3 +290,9 @@ class ExportService:
         if completed.returncode != 0:
             stderr = completed.stderr.strip() or completed.stdout.strip() or "ffmpeg failed"
             raise RuntimeError(stderr)
+
+    @staticmethod
+    def _merge_warning_text(existing: str | None, incoming: str) -> str:
+        if not existing:
+            return incoming
+        return f"{existing}\n{incoming}"

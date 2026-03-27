@@ -1,10 +1,16 @@
 import json
 from pathlib import Path
 
+import mimetypes
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
-from matanyone2.webapp.api.dependencies import get_repository, get_settings
+from matanyone2.webapp.api.dependencies import (
+    get_repository,
+    get_settings,
+    get_video_service,
+)
 from matanyone2.webapp.models import JobStatus
 
 
@@ -16,6 +22,11 @@ ARTIFACT_SPECS = (
     ("alpha.mp4", "Alpha matte", "alpha"),
     ("rgba_png.zip", "RGBA PNG sequence", "png_sequence"),
     ("output_prores4444.mov", "ProRes 4444", "prores"),
+)
+
+PREVIEW_ARTIFACT_SPECS = (
+    ("foreground", "preview_foreground.mp4"),
+    ("alpha", "preview_alpha.mp4"),
 )
 
 TIMELINE_STEPS = (
@@ -137,6 +148,16 @@ def _artifact_urls(job_id: str, runtime_root: Path) -> dict[str, str]:
     return artifacts
 
 
+def _build_preview_payload(job_id: str, runtime_root: Path) -> dict[str, str]:
+    job_dir = Path(runtime_root) / "jobs" / job_id
+    preview_artifacts: dict[str, str] = {}
+    for preview_kind, artifact_name in PREVIEW_ARTIFACT_SPECS:
+        artifact_path = job_dir / artifact_name
+        if artifact_path.exists() and artifact_path.is_file():
+            preview_artifacts[preview_kind] = f"/api/jobs/{job_id}/artifacts/{artifact_name}"
+    return preview_artifacts
+
+
 @router.get("/api/jobs/{job_id}")
 def get_job_status(
     job_id: str,
@@ -162,6 +183,7 @@ def get_job_status(
         "error_text": job.error_text,
         "source_video_url": f"/api/jobs/{job.job_id}/source-video",
         "artifacts": artifacts,
+        "preview_artifacts": _build_preview_payload(job.job_id, settings.runtime_root),
         "artifact_details": artifact_details,
         "job_summary": _build_job_summary(job),
         "timeline": _build_timeline(job.status),
@@ -172,6 +194,7 @@ def get_job_status(
 def get_source_video(
     job_id: str,
     repository=Depends(get_repository),
+    video_service=Depends(get_video_service),
 ):
     try:
         job = repository.get_job(job_id)
@@ -181,7 +204,20 @@ def get_source_video(
     source_path = Path(job.source_video_path)
     if not source_path.exists() or not source_path.is_file():
         raise HTTPException(status_code=404, detail="source video not found")
-    return FileResponse(path=source_path, filename=source_path.name)
+    preview_path = None
+    try:
+        preview_path = video_service.ensure_browser_preview(
+            source_path,
+            preview_path=source_path.parent / "preview_source.mp4",
+        )
+    except RuntimeError:
+        preview_path = None
+    serving_path = preview_path or source_path
+    return FileResponse(
+        path=serving_path,
+        filename=serving_path.name,
+        media_type=mimetypes.guess_type(serving_path.name)[0] or "video/mp4",
+    )
 
 
 @router.get("/api/jobs/{job_id}/artifacts/{artifact_name}")

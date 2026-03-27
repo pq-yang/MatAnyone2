@@ -71,6 +71,8 @@ def test_process_next_job_completes_with_warning_when_export_warns(tmp_path):
             return ExportResult(
                 rgba_png_dir=rgba_dir,
                 png_zip_path=zip_path,
+                preview_foreground_path=Path(job_dir) / "preview_foreground.mp4",
+                preview_alpha_path=Path(job_dir) / "preview_alpha.mp4",
                 prores_path=None,
                 warning_text="ffmpeg failed",
             )

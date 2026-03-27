@@ -43,6 +43,7 @@ class DraftRecord:
     frame_count: int
     duration_seconds: float
     template_frame_index: int = 0
+    browser_preview_path: Path | None = None
 
 
 @dataclass(slots=True)
@@ -137,5 +138,7 @@ class InferenceResult:
 class ExportResult:
     rgba_png_dir: Path
     png_zip_path: Path
+    preview_foreground_path: Path | None
+    preview_alpha_path: Path | None
     prores_path: Path | None
     warning_text: str | None

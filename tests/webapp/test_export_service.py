@@ -35,6 +35,11 @@ def test_export_assets_creates_png_zip_even_when_prores_fails(tmp_path, monkeypa
     )
     monkeypatch.setattr(
         service,
+        "_export_preview_videos",
+        lambda *args, **kwargs: (tmp_path / "preview_foreground.mp4", tmp_path / "preview_alpha.mp4"),
+    )
+    monkeypatch.setattr(
+        service,
         "_export_prores",
         lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("ffmpeg failed")),
     )
@@ -42,6 +47,8 @@ def test_export_assets_creates_png_zip_even_when_prores_fails(tmp_path, monkeypa
     result = service.export_assets(foreground, alpha, tmp_path)
 
     assert result.png_zip_path.name == "rgba_png.zip"
+    assert result.preview_foreground_path.name == "preview_foreground.mp4"
+    assert result.preview_alpha_path.name == "preview_alpha.mp4"
     assert result.warning_text == "ffmpeg failed"
 
 
@@ -72,6 +79,8 @@ def test_export_assets_writes_rgba_png_sequence_from_videos(tmp_path):
     rgba_frame = Image.open(result.rgba_png_dir / "0000.png")
 
     assert result.png_zip_path.exists()
+    assert result.preview_foreground_path.exists()
+    assert result.preview_alpha_path.exists()
     assert rgba_frame.mode == "RGBA"
     assert rgba_frame.getextrema()[3][1] > 0
 

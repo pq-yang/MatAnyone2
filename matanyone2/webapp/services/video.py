@@ -1,5 +1,6 @@
 from pathlib import Path
 import shutil
+import subprocess
 import uuid
 
 import cv2
@@ -50,10 +51,19 @@ class VideoDraftService:
 
         template_frame_path = draft_dir / "template_frame.png"
         cv2.imwrite(str(template_frame_path), frame)
+        browser_preview_path = draft_dir / "preview_source.mp4"
+        try:
+            browser_preview_path = self.ensure_browser_preview(
+                staged_video_path,
+                preview_path=browser_preview_path,
+            )
+        except RuntimeError:
+            browser_preview_path = None
 
         return DraftRecord(
             draft_id=draft_id,
             video_path=staged_video_path,
+            browser_preview_path=browser_preview_path,
             template_frame_path=template_frame_path,
             width=width,
             height=height,
@@ -80,6 +90,39 @@ class VideoDraftService:
         draft.template_frame_index = frame_index
         return draft
 
+    def ensure_browser_preview(
+        self,
+        video_path: Path,
+        *,
+        preview_path: Path | None = None,
+    ) -> Path:
+        preview_path = preview_path or self._default_preview_path(video_path)
+        if preview_path.exists() and preview_path.is_file():
+            return preview_path
+
+        ffmpeg_binary = shutil.which("ffmpeg")
+        if ffmpeg_binary is None:
+            raise RuntimeError("ffmpeg is not installed")
+
+        preview_path.parent.mkdir(parents=True, exist_ok=True)
+        command = [
+            ffmpeg_binary,
+            "-y",
+            "-i",
+            str(video_path),
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
+            str(preview_path),
+        ]
+        self._run_ffmpeg_command(command)
+        if not preview_path.exists():
+            raise RuntimeError("ffmpeg did not produce browser preview output")
+        return preview_path
+
     @staticmethod
     def _read_frame(video_path: Path, frame_index: int):
         capture = cv2.VideoCapture(str(video_path))
@@ -91,3 +134,19 @@ class VideoDraftService:
         if not ok:
             raise ValueError("unable to read requested frame")
         return frame
+
+    @staticmethod
+    def _default_preview_path(video_path: Path) -> Path:
+        return video_path.parent / "preview_source.mp4"
+
+    @staticmethod
+    def _run_ffmpeg_command(command: list[str]) -> None:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if completed.returncode != 0:
+            stderr = completed.stderr.strip() or completed.stdout.strip() or "ffmpeg failed"
+            raise RuntimeError(stderr)

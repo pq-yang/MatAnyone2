@@ -66,46 +66,6 @@
       <div id="target-list" class="target-list"></div>
     </section>
 
-    <section id="keyframe-controls" class="workflow-section">
-      <div class="workflow-section__header">
-        <div>
-          <p class="panel__eyebrow">Key Frame</p>
-          <h2 class="workflow-section__title">Segmentation anchor</h2>
-        </div>
-        <button id="apply-template-frame" class="tool-button tool-button--compact" type="button">
-          Apply Frame
-        </button>
-      </div>
-      <div class="slider-stack">
-        <div class="keyframe-video-shell">
-          <video
-            id="keyframe-video"
-            class="keyframe-video"
-            src="/api/drafts/{{ draft_id }}/source-video"
-            preload="metadata"
-            muted
-            playsinline
-            controls
-          ></video>
-        </div>
-        <label class="workflow-field" for="template-frame-slider">
-          <span class="workflow-field__label">
-            Anchor frame
-            <output id="template-frame-value" for="template-frame-slider">0</output>
-          </span>
-          <input id="template-frame-slider" type="range" min="0" max="{{ draft.frame_count - 1 }}" value="{{ draft.template_frame_index }}">
-        </label>
-        <div id="keyframe-selection-summary" class="keyframe-selection-summary">
-          <span id="keyframe-selected-label">Selected frame 0</span>
-          <span id="keyframe-applied-label">Applied frame {{ draft.template_frame_index }}</span>
-          <span id="keyframe-time-label">00:00 / 00:00</span>
-        </div>
-      </div>
-      <p class="panel-note">
-        Scrub to the frame where the silhouette reads best, then apply it as the segmentation anchor. The queued job will propagate from that frame forward and backward before stitching the result.
-      </p>
-    </section>
-
     <section id="selection-controls" class="workflow-section">
       <div class="workflow-section__header">
         <div>
@@ -330,6 +290,44 @@
           alt="Template frame for {{ draft_id }}"
         >
       </div>
+
+      <section id="canvas-keyframe-panel" class="canvas-keyframe-panel" aria-label="Key frame timeline">
+        <div class="canvas-keyframe-panel__header">
+          <div>
+            <p class="panel__eyebrow">Key Frame</p>
+            <h3 class="panel__title">Segmentation anchor</h3>
+          </div>
+          <button id="apply-template-frame" class="tool-button tool-button--compact" type="button">
+            Apply Frame
+          </button>
+        </div>
+        <div class="keyframe-video-shell">
+          <video
+            id="keyframe-video"
+            class="keyframe-video"
+            src="/api/drafts/{{ draft_id }}/source-video"
+            preload="metadata"
+            muted
+            playsinline
+            controls
+          ></video>
+        </div>
+        <label class="workflow-field" for="template-frame-slider">
+          <span class="workflow-field__label">
+            Anchor frame
+            <output id="template-frame-value" for="template-frame-slider">0</output>
+          </span>
+          <input id="template-frame-slider" type="range" min="0" max="{{ draft.frame_count - 1 }}" value="{{ draft.template_frame_index }}">
+        </label>
+        <div id="keyframe-selection-summary" class="keyframe-selection-summary">
+          <span id="keyframe-selected-label">Selected frame 0</span>
+          <span id="keyframe-applied-label">Applied frame {{ draft.template_frame_index }}</span>
+          <span id="keyframe-time-label">00:00 / 00:00</span>
+        </div>
+        <p class="panel-note">
+          在主画布里直接选一帧作为抠像起点。提交后会从这帧向前和向后分别推理，再拼接完整结果。
+        </p>
+      </section>
 
       <section id="preview-compare-strip" class="preview-compare-strip" aria-label="Live preview comparison">
         <article class="preview-compare-card">

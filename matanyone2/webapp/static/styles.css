@@ -608,6 +608,22 @@ button {
   gap: var(--space-5);
 }
 
+.canvas-keyframe-panel {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: calc(var(--radius-xl) - 10px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.canvas-keyframe-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
 .canvas-meta,
 .canvas-toolbar {
   display: flex;

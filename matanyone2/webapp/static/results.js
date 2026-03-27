@@ -54,9 +54,9 @@ function bindResultsPage() {
   function previewUrlFor(payload) {
     switch (state.mode) {
       case "foreground":
-        return payload.artifacts?.["foreground.mp4"] || null;
+        return payload.preview_artifacts?.foreground || null;
       case "alpha":
-        return payload.artifacts?.["alpha.mp4"] || null;
+        return payload.preview_artifacts?.alpha || null;
       case "source":
       default:
         return payload.source_video_url || root.dataset.sourceVideoEndpoint || null;
@@ -65,21 +65,21 @@ function bindResultsPage() {
 
   function previewCaptionFor(payload) {
     if (state.mode === "overlay") {
-      return payload.artifacts?.["foreground.mp4"] && payload.artifacts?.["alpha.mp4"]
-        ? "Overlay preview is compositing foreground and alpha over the source plate in the browser."
-        : "Overlay preview becomes available after both foreground and alpha exports are ready.";
+      return payload.preview_artifacts?.foreground && payload.preview_artifacts?.alpha
+        ? "Overlay preview is compositing browser-safe foreground and alpha streams over the source plate."
+        : "Overlay preview becomes available after browser preview streams finish transcoding.";
     }
     if (state.mode === "alpha") {
-      return payload.artifacts?.["alpha.mp4"]
-        ? "Alpha preview is showing the grayscale matte stream."
-        : "Alpha preview becomes available after export starts.";
+      return payload.preview_artifacts?.alpha
+        ? "Alpha preview is showing the browser-safe grayscale matte stream."
+        : "Alpha preview becomes available after the browser preview stream is ready.";
     }
     if (state.mode === "foreground") {
-      return payload.artifacts?.["foreground.mp4"]
-        ? "Foreground preview is showing the current rendered foreground pass."
-        : "Foreground preview becomes available after inference output is written.";
+      return payload.preview_artifacts?.foreground
+        ? "Foreground preview is showing the browser-safe rendered foreground pass."
+        : "Foreground preview becomes available after the browser preview stream is ready.";
     }
-    return "Source preview is always available for quick comparison against the matte outputs.";
+    return "Source preview is using a browser-safe transcode for quick comparison against the matte outputs.";
   }
 
   function renderReviewSummary(summary, payload) {
@@ -441,8 +441,8 @@ function bindResultsPage() {
 
   function renderOverlayPreview(payload) {
     const sourceUrl = payload.source_video_url || root.dataset.sourceVideoEndpoint || null;
-    const foregroundUrl = payload.artifacts?.["foreground.mp4"] || null;
-    const alphaUrl = payload.artifacts?.["alpha.mp4"] || null;
+    const foregroundUrl = payload.preview_artifacts?.foreground || null;
+    const alphaUrl = payload.preview_artifacts?.alpha || null;
 
     if (!sourceUrl || !foregroundUrl || !alphaUrl || !previewVideo || !overlayCanvas) {
       clearOverlayCanvas();

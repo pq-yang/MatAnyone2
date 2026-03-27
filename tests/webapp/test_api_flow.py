@@ -266,6 +266,47 @@ def test_workbench_exposes_source_video_scrubber_contract(
     assert video_response.headers["content-type"].startswith("video/")
 
 
+def test_draft_source_video_endpoint_prefers_browser_preview(app_client: TestClient, sample_video_upload):
+    upload_response = app_client.post(
+        "/api/uploads",
+        files={"video": sample_video_upload},
+    )
+    draft_id = upload_response.json()["draft_id"]
+    session = app_client.app.state.drafts[draft_id]
+    preview_path = session.draft.video_path.parent / "preview_source.mp4"
+    preview_path.write_bytes(b"preview-source")
+    session.draft.browser_preview_path = preview_path
+
+    response = app_client.get(f"/api/drafts/{draft_id}/source-video")
+
+    assert response.status_code == 200
+    assert response.content == b"preview-source"
+
+
+def test_job_status_exposes_browser_preview_artifacts(
+    app_client: TestClient,
+):
+    repository = app_client.app.state.repository
+    runtime_root = app_client.app.state.settings.runtime_root
+    job = repository.create_job(
+        source_video_path="queued.mp4",
+        template_frame_index=0,
+        mask_path="queued.png",
+        params_json="{}",
+    )
+    job_dir = runtime_root / "jobs" / job.job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+    (job_dir / "preview_foreground.mp4").write_bytes(b"preview-fg")
+    (job_dir / "preview_alpha.mp4").write_bytes(b"preview-alpha")
+
+    response = app_client.get(f"/api/jobs/{job.job_id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["preview_artifacts"]["foreground"] == f"/api/jobs/{job.job_id}/artifacts/preview_foreground.mp4"
+    assert payload["preview_artifacts"]["alpha"] == f"/api/jobs/{job.job_id}/artifacts/preview_alpha.mp4"
+
+
 def test_target_preset_change_rebuilds_current_mask_preview(
     app_client: TestClient,
     sample_video_upload,
@@ -548,6 +589,29 @@ def test_job_source_video_endpoint_serves_source_file(app_client):
 
     assert response.status_code == 200
     assert response.content == b"video-bytes"
+
+
+def test_job_source_video_endpoint_prefers_browser_preview_when_present(app_client):
+    runtime_root = app_client.app.state.settings.runtime_root
+    source_dir = runtime_root / "jobs" / "source-preview"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    source_path = source_dir / "source.mp4"
+    preview_path = source_dir / "preview_source.mp4"
+    source_path.write_bytes(b"video-bytes")
+    preview_path.write_bytes(b"preview-video-bytes")
+
+    repository = app_client.app.state.repository
+    job = repository.create_job(
+        source_video_path=str(source_path),
+        template_frame_index=0,
+        mask_path="queued.png",
+        params_json="{}",
+    )
+
+    response = app_client.get(f"/api/jobs/{job.job_id}/source-video")
+
+    assert response.status_code == 200
+    assert response.content == b"preview-video-bytes"
 
 
 def test_missing_job_page_returns_404(app_client: TestClient):

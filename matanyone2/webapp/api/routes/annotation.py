@@ -433,13 +433,28 @@ def get_current_preview(draft_id: str, draft_store=Depends(get_draft_store)):
 
 
 @router.get("/api/drafts/{draft_id}/source-video")
-def get_source_video(draft_id: str, draft_store=Depends(get_draft_store)):
+def get_source_video(
+    draft_id: str,
+    draft_store=Depends(get_draft_store),
+    video_service=Depends(get_video_service),
+):
     session = _require_session(draft_store, draft_id)
     video_path = session.draft.video_path
+    preview_path = session.draft.browser_preview_path
+    if preview_path is None or not preview_path.exists():
+        try:
+            preview_path = video_service.ensure_browser_preview(
+                video_path,
+                preview_path=video_path.parent / "preview_source.mp4",
+            )
+            session.draft.browser_preview_path = preview_path
+        except RuntimeError:
+            preview_path = None
+    serving_path = preview_path or video_path
     return FileResponse(
-        video_path,
-        media_type=mimetypes.guess_type(video_path.name)[0] or "video/mp4",
-        filename=video_path.name,
+        serving_path,
+        media_type=mimetypes.guess_type(serving_path.name)[0] or "video/mp4",
+        filename=serving_path.name,
     )
 
 

@@ -28,13 +28,13 @@ def test_annotation_page_renders_workbench_layout(
     assert 'id="workflow-panel"' in response.text
     assert 'id="target-controls"' in response.text
     assert 'id="target-list"' in response.text
-    assert 'id="keyframe-controls"' in response.text
     assert 'id="selection-controls"' in response.text
     assert 'id="preset-controls"' in response.text
     assert 'id="brush-controls"' in response.text
     assert 'id="detail-controls"' in response.text
     assert 'id="export-selection-panel"' in response.text
     assert 'id="canvas-stage"' in response.text
+    assert 'id="canvas-keyframe-panel"' in response.text
     assert 'id="layer-panel"' in response.text
     assert 'id="inspector-panel"' in response.text
     assert 'id="canvas-view-tabs"' in response.text
@@ -86,3 +86,19 @@ def test_job_page_renders_review_viewport(app_client: TestClient):
     assert 'id="job-timeline"' in response.text
     assert 'id="artifact-summary-list"' in response.text
     assert 'id="warning-panel"' in response.text
+
+
+def test_job_page_keeps_preview_streams_separate_from_download_artifacts(app_client: TestClient):
+    repository = app_client.app.state.repository
+    job = repository.create_job(
+        source_video_path="queued.mp4",
+        template_frame_index=0,
+        mask_path="queued.png",
+        params_json="{}",
+    )
+
+    response = app_client.get(f"/jobs/{job.job_id}")
+
+    assert response.status_code == 200
+    assert 'data-preview-foreground-endpoint' in response.text
+    assert 'data-preview-alpha-endpoint' in response.text

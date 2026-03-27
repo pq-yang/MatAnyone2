@@ -7,6 +7,8 @@
   class="results-shell"
   data-status-endpoint="/api/jobs/{{ job.job_id }}"
   data-source-video-endpoint="/api/jobs/{{ job.job_id }}/source-video"
+  data-preview-foreground-endpoint="/api/jobs/{{ job.job_id }}/artifacts/preview_foreground.mp4"
+  data-preview-alpha-endpoint="/api/jobs/{{ job.job_id }}/artifacts/preview_alpha.mp4"
   data-poll-interval-ms="2000"
 >
   <header class="results-header panel">
