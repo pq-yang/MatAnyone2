@@ -34,26 +34,32 @@ def test_annotation_page_renders_workbench_layout(
     assert 'id="detail-controls"' in response.text
     assert 'id="export-selection-panel"' in response.text
     assert 'id="canvas-stage"' in response.text
+    assert 'id="monitor-header"' in response.text
+    assert 'id="monitor-stage-pills"' in response.text
     assert 'id="canvas-keyframe-panel"' in response.text
-    assert 'id="processing-range-panel"' in response.text
-    assert 'id="processing-range-start"' in response.text
-    assert 'id="processing-range-end"' in response.text
-    assert 'id="apply-processing-range"' in response.text
+    assert 'id="source-playhead-slider"' in response.text
+    assert 'id="timeline-range-rail"' in response.text
+    assert 'id="timeline-range-selection"' in response.text
+    assert 'id="mark-range-in"' in response.text
+    assert 'id="mark-range-out"' in response.text
+    assert 'id="clear-range-selection"' in response.text
+    assert 'id="timeline-selected-label"' in response.text
+    assert 'id="timeline-applied-label"' in response.text
+    assert 'id="timeline-in-chip"' in response.text
+    assert 'id="timeline-out-chip"' in response.text
+    assert 'id="timeline-duration-chip"' in response.text
     assert 'id="anchor-frame-panel"' in response.text
     assert 'id="layer-panel"' in response.text
-    assert 'id="inspector-panel"' in response.text
+    assert 'id="session-summary"' in response.text
     assert 'id="canvas-view-tabs"' in response.text
     assert 'data-canvas-mode="source"' in response.text
     assert 'data-canvas-mode="overlay"' in response.text
     assert 'data-canvas-mode="mask"' in response.text
     assert 'id="undo-click"' in response.text
     assert 'id="reset-target"' in response.text
-    assert 'id="stage-back"' in response.text
-    assert 'id="stage-forward"' in response.text
     assert 'id="template-frame-slider"' in response.text
     assert 'id="keyframe-video"' in response.text
-    assert 'id="keyframe-selection-summary"' in response.text
-    assert 'id="apply-template-frame"' in response.text
+    assert 'id="anchor-frame-summary"' in response.text
     assert 'class="keyframe-video-shell"' not in response.text
     assert response.text.index('id="keyframe-video"') < response.text.index('id="canvas-keyframe-panel"')
     assert 'id="brush-radius"' in response.text
@@ -67,6 +73,10 @@ def test_annotation_page_renders_workbench_layout(
     assert 'id="canvas-stage-note"' in response.text
     assert 'id="stage-guidance-title"' in response.text
     assert 'id="stage-guidance-copy"' in response.text
+    assert 'id="processing-range-start"' not in response.text
+    assert 'id="processing-range-end"' not in response.text
+    assert 'id="apply-processing-range"' not in response.text
+    assert 'id="apply-template-frame"' not in response.text
 
 
 def test_job_page_renders_review_viewport(app_client: TestClient):

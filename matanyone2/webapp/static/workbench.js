@@ -67,22 +67,22 @@ function bindWorkbench() {
   const brushRadiusValue = document.getElementById("brush-radius-value");
   const overlayOpacityInput = document.getElementById("overlay-opacity");
   const overlayOpacityValue = document.getElementById("overlay-opacity-value");
-  const stageBackButton = document.getElementById("stage-back");
-  const stageForwardButton = document.getElementById("stage-forward");
-  const processingRangeStart = document.getElementById("processing-range-start");
-  const processingRangeEnd = document.getElementById("processing-range-end");
-  const processingRangeStartValue = document.getElementById("processing-range-start-value");
-  const processingRangeEndValue = document.getElementById("processing-range-end-value");
-  const processingRangeStartTimecode = document.getElementById("processing-range-start-timecode");
-  const processingRangeEndTimecode = document.getElementById("processing-range-end-timecode");
-  const applyProcessingRangeButton = document.getElementById("apply-processing-range");
-  const rangeSelectedLabel = document.getElementById("range-selected-label");
-  const rangeAppliedLabel = document.getElementById("range-applied-label");
-  const rangeTimeLabel = document.getElementById("range-time-label");
+  const sourcePlayheadSlider = document.getElementById("source-playhead-slider");
+  const markRangeInButton = document.getElementById("mark-range-in");
+  const markRangeOutButton = document.getElementById("mark-range-out");
+  const clearRangeSelectionButton = document.getElementById("clear-range-selection");
+  const toggleSourcePlaybackButton = document.getElementById("toggle-source-playback");
+  const timelineCurrentLabel = document.getElementById("timeline-current-label");
+  const timelineSelectedLabel = document.getElementById("timeline-selected-label");
+  const timelineAppliedLabel = document.getElementById("timeline-applied-label");
+  const timelineInChip = document.getElementById("timeline-in-chip");
+  const timelineOutChip = document.getElementById("timeline-out-chip");
+  const timelineDurationChip = document.getElementById("timeline-duration-chip");
+  const timelineRangeRail = document.getElementById("timeline-range-rail");
+  const timelineRangeSelection = document.getElementById("timeline-range-selection");
   const templateFrameSlider = document.getElementById("template-frame-slider");
   const templateFrameValue = document.getElementById("template-frame-value");
-  const templateFrameTimecode = document.getElementById("template-frame-timecode");
-  const applyTemplateFrameButton = document.getElementById("apply-template-frame");
+  const anchorFrameSummary = document.getElementById("anchor-frame-summary");
   const keyframeVideo = document.getElementById("keyframe-video");
   const keyframeSelectedLabel = document.getElementById("keyframe-selected-label");
   const keyframeAppliedLabel = document.getElementById("keyframe-applied-label");
@@ -103,10 +103,13 @@ function bindWorkbench() {
     selectedMasks: new Set(),
     brushRadius: Number(brushRadiusInput?.value || 28),
     overlayOpacity: Number(overlayOpacityInput?.value || 72),
-    rangeSelectionStart: Number(processingRangeStart?.value || 0),
-    rangeSelectionEnd: Number(processingRangeEnd?.value || 0),
-    rangeAppliedStart: Number(processingRangeStart?.value || 0),
-    rangeAppliedEnd: Number(processingRangeEnd?.value || 0),
+    playheadFrame: Number(sourcePlayheadSlider?.value || 0),
+    rangeSelectionStart: 0,
+    rangeSelectionEnd: 0,
+    rangeSelectionTouchedStart: false,
+    rangeSelectionTouchedEnd: false,
+    rangeAppliedStart: 0,
+    rangeAppliedEnd: 0,
     templateFrameSelection: Number(templateFrameSlider?.value || 0),
     templateFrameApplied: templateFrameSlider?.value === "" ? null : Number(templateFrameSlider?.value || 0),
     fps: Number(root.dataset.fps || 0),
@@ -173,35 +176,6 @@ function bindWorkbench() {
     return Math.max(minFrame, Math.min(maxFrame, frameIndex));
   }
 
-  function parseTimecodeToFrame(value, payload = state.workbench) {
-    const trimmed = String(value || "").trim();
-    if (!trimmed) {
-      return null;
-    }
-
-    let seconds = Number(trimmed);
-    if (!Number.isFinite(seconds)) {
-      const segments = trimmed.split(":").map((segment) => Number(segment));
-      if (segments.some((segment) => !Number.isFinite(segment))) {
-        return null;
-      }
-      seconds = segments.reduce((total, segment) => (total * 60) + segment, 0);
-    }
-
-    const fps = Number(payload?.fps || state.fps || 0);
-    if (!Number.isFinite(fps) || fps <= 0) {
-      return null;
-    }
-    return Math.round(seconds * fps);
-  }
-
-  function setTimecodeInputValue(input, frameIndex, payload = state.workbench) {
-    if (!input) {
-      return;
-    }
-    input.value = formatFrameTimestamp(frameIndex, payload);
-  }
-
   function syncCompareStrip(payload = state.workbench) {
     if (!previewBeforeImage || !previewLiveImage || !payload) {
       return;
@@ -215,15 +189,37 @@ function bindWorkbench() {
     previewLiveImage.src = state.compareLiveSrc;
   }
 
+  function syncTimelineRangeRail(payload) {
+    if (!timelineRangeRail || !timelineRangeSelection || !payload) {
+      return;
+    }
+    const maxFrame = Math.max(1, (payload.frame_count || 1) - 1);
+    const pendingStart = Math.min(state.rangeSelectionStart, state.rangeSelectionEnd);
+    const pendingEnd = Math.max(state.rangeSelectionStart, state.rangeSelectionEnd);
+    const appliedStartPercent = (state.rangeAppliedStart / maxFrame) * 100;
+    const appliedEndPercent = (state.rangeAppliedEnd / maxFrame) * 100;
+    const pendingStartPercent = (pendingStart / maxFrame) * 100;
+    const pendingEndPercent = (pendingEnd / maxFrame) * 100;
+    const rangeDirty = pendingStart !== state.rangeAppliedStart || pendingEnd !== state.rangeAppliedEnd;
+
+    timelineRangeRail.style.setProperty("--applied-range-start", `${appliedStartPercent}%`);
+    timelineRangeRail.style.setProperty("--applied-range-end", `${appliedEndPercent}%`);
+    timelineRangeRail.style.setProperty("--pending-range-start", `${pendingStartPercent}%`);
+    timelineRangeRail.style.setProperty("--pending-range-end", `${pendingEndPercent}%`);
+    timelineRangeRail.dataset.rangeState = rangeDirty ? "pending" : "applied";
+    timelineRangeSelection.dataset.rangeState = rangeDirty ? "pending" : "applied";
+  }
+
   function syncKeyframeSummary(payload) {
     if (!payload) {
       return;
     }
+    const maxFrame = Math.max(0, (payload.frame_count || 1) - 1);
     state.fps = Number(payload.fps || state.fps || 0);
     state.durationSeconds = Number(payload.duration_seconds || state.durationSeconds || 0);
     state.rangeAppliedStart = Number(payload.process_start_frame_index || 0);
     state.rangeAppliedEnd = Number(
-      payload.process_end_frame_index ?? Math.max(0, (payload.frame_count || 1) - 1)
+      payload.process_end_frame_index ?? maxFrame
     );
 
     if (
@@ -236,21 +232,18 @@ function bindWorkbench() {
     if (
       state.rangeSelectionEnd === undefined
       || Number.isNaN(state.rangeSelectionEnd)
-      || state.rangeSelectionEnd < state.rangeSelectionStart
+      || state.rangeSelectionEnd < 0
     ) {
       state.rangeSelectionEnd = state.rangeAppliedEnd;
     }
 
-    state.rangeSelectionStart = clampFrame(
-      state.rangeSelectionStart,
-      0,
-      Math.max(0, (payload.frame_count || 1) - 1)
-    );
-    state.rangeSelectionEnd = clampFrame(
-      Math.max(state.rangeSelectionStart, state.rangeSelectionEnd),
-      state.rangeSelectionStart,
-      Math.max(0, (payload.frame_count || 1) - 1)
-    );
+    state.rangeSelectionStart = clampFrame(state.rangeSelectionStart, 0, maxFrame);
+    state.rangeSelectionEnd = clampFrame(state.rangeSelectionEnd, 0, maxFrame);
+    if (state.rangeSelectionStart > state.rangeSelectionEnd) {
+      const nextStart = state.rangeSelectionEnd;
+      state.rangeSelectionEnd = state.rangeSelectionStart;
+      state.rangeSelectionStart = nextStart;
+    }
 
     state.templateFrameApplied = hasTemplateFrame(payload)
       ? Number(payload.template_frame_index)
@@ -263,28 +256,40 @@ function bindWorkbench() {
     ) {
       state.templateFrameSelection = state.templateFrameApplied ?? state.rangeAppliedStart;
     }
+    if (
+      state.playheadFrame === undefined
+      || Number.isNaN(state.playheadFrame)
+      || state.playheadFrame < 0
+      || state.playheadFrame > maxFrame
+    ) {
+      state.playheadFrame = state.templateFrameApplied ?? state.rangeAppliedStart;
+    }
 
-    if (processingRangeStart) {
-      processingRangeStart.max = String(Math.max(0, (payload.frame_count || 1) - 1));
-      processingRangeStart.value = String(state.rangeSelectionStart);
+    if (sourcePlayheadSlider) {
+      sourcePlayheadSlider.max = String(maxFrame);
+      sourcePlayheadSlider.value = String(clampFrame(state.playheadFrame, 0, maxFrame));
     }
-    if (processingRangeEnd) {
-      processingRangeEnd.max = String(Math.max(0, (payload.frame_count || 1) - 1));
-      processingRangeEnd.value = String(state.rangeSelectionEnd);
-    }
-    updateRangeOutput(processingRangeStartValue, Number(state.rangeSelectionStart || 0), "");
-    updateRangeOutput(processingRangeEndValue, Number(state.rangeSelectionEnd || 0), "");
-    setTimecodeInputValue(processingRangeStartTimecode, state.rangeSelectionStart, payload);
-    setTimecodeInputValue(processingRangeEndTimecode, state.rangeSelectionEnd, payload);
 
-    if (rangeSelectedLabel) {
-      rangeSelectedLabel.textContent = `Selected range ${state.rangeSelectionStart} - ${state.rangeSelectionEnd}`;
+    if (timelineCurrentLabel) {
+      timelineCurrentLabel.textContent = `Playhead · Frame ${state.playheadFrame} · ${formatFrameTimestamp(state.playheadFrame, payload)}`;
     }
-    if (rangeAppliedLabel) {
-      rangeAppliedLabel.textContent = `Applied range ${state.rangeAppliedStart} - ${state.rangeAppliedEnd}`;
+    if (timelineSelectedLabel) {
+      timelineSelectedLabel.textContent = `Pending range · Frame ${state.rangeSelectionStart} - ${state.rangeSelectionEnd}`;
     }
-    if (rangeTimeLabel) {
-      rangeTimeLabel.textContent = `${formatFrameTimestamp(state.rangeSelectionStart, payload)} - ${formatFrameTimestamp(state.rangeSelectionEnd, payload)}`;
+    if (timelineAppliedLabel) {
+      timelineAppliedLabel.textContent = `Processing range · Frame ${state.rangeAppliedStart} - ${state.rangeAppliedEnd}`;
+    }
+    if (timelineInChip) {
+      timelineInChip.textContent = `In · ${formatFrameTimestamp(state.rangeSelectionStart, payload)} · F${state.rangeSelectionStart}`;
+    }
+    if (timelineOutChip) {
+      timelineOutChip.textContent = `Out · ${formatFrameTimestamp(state.rangeSelectionEnd, payload)} · F${state.rangeSelectionEnd}`;
+    }
+    if (timelineDurationChip) {
+      const durationFrames = Math.max(1, state.rangeSelectionEnd - state.rangeSelectionStart + 1);
+      const fps = Number(payload.fps || state.fps || 0);
+      const duration = fps > 0 ? durationFrames / fps : 0;
+      timelineDurationChip.textContent = `Duration · ${formatDuration(duration)} · ${durationFrames}f`;
     }
 
     if (templateFrameSlider) {
@@ -293,8 +298,12 @@ function bindWorkbench() {
       templateFrameSlider.value = String(state.templateFrameSelection);
     }
     updateRangeOutput(templateFrameValue, Number(state.templateFrameSelection || 0), "");
-    setTimecodeInputValue(templateFrameTimecode, state.templateFrameSelection, payload);
 
+    if (anchorFrameSummary) {
+      anchorFrameSummary.textContent = state.templateFrameApplied === null
+        ? "Anchor · Not set"
+        : `Anchor · Frame ${state.templateFrameApplied} · ${formatFrameTimestamp(state.templateFrameApplied, payload)}`;
+    }
     if (keyframeSelectedLabel) {
       keyframeSelectedLabel.textContent = `Selected frame ${state.templateFrameSelection}`;
     }
@@ -307,11 +316,13 @@ function bindWorkbench() {
       keyframeTimeLabel.textContent = `${formatFrameTimestamp(state.templateFrameSelection, payload)} / ${formatFrameTimestamp(state.rangeAppliedEnd, payload)}`;
     }
 
+    syncTimelineRangeRail(payload);
+
     if (keyframeVideo) {
       if (!keyframeVideo.src) {
         keyframeVideo.src = root.dataset.sourceVideoUrl;
       }
-      const desiredTime = frameToSeconds(state.templateFrameSelection, payload);
+      const desiredTime = frameToSeconds(state.playheadFrame, payload);
       if (Number.isFinite(desiredTime) && Math.abs((keyframeVideo.currentTime || 0) - desiredTime) > 0.04) {
         try {
           keyframeVideo.currentTime = desiredTime;
@@ -352,9 +363,14 @@ function bindWorkbench() {
 
     if (showVideo) {
       image.style.opacity = "1";
+      syncSourcePlaybackButton();
       return;
     }
+    if (!keyframeVideo.paused) {
+      keyframeVideo.pause();
+    }
     image.style.opacity = String(state.overlayOpacity / 100);
+    syncSourcePlaybackButton();
   }
 
   function syncSelectedMasks(payload) {
@@ -529,6 +545,9 @@ function bindWorkbench() {
       state.rangeSelectionStart !== state.rangeAppliedStart
       || state.rangeSelectionEnd !== state.rangeAppliedEnd
     );
+    const rangePendingCompletion = (
+      state.rangeSelectionTouchedStart !== state.rangeSelectionTouchedEnd
+    );
     root.dataset.stage = payload.stage;
     root.dataset.editable = payload.can_apply_clicks ? "true" : "false";
 
@@ -538,29 +557,12 @@ function bindWorkbench() {
     saveButton?.toggleAttribute("disabled", !payload.can_save_current_target);
     submitButton?.toggleAttribute("disabled", !canSubmit);
     applyTargetNameButton?.toggleAttribute("disabled", !payload.active_target_id);
-    stageBackButton?.toggleAttribute("disabled", payload.stage === "coarse");
-    stageForwardButton?.toggleAttribute("disabled", payload.stage === "preview");
-    if (applyProcessingRangeButton) {
-      const invalidRange = state.rangeSelectionStart > state.rangeSelectionEnd;
-      applyProcessingRangeButton.toggleAttribute(
-        "disabled",
-        !payload.can_apply_range || invalidRange || !rangeDirty
-      );
-    }
-    processingRangeStart?.toggleAttribute("disabled", !payload.can_apply_range);
-    processingRangeEnd?.toggleAttribute("disabled", !payload.can_apply_range);
-    processingRangeStartTimecode?.toggleAttribute("disabled", !payload.can_apply_range);
-    processingRangeEndTimecode?.toggleAttribute("disabled", !payload.can_apply_range);
-    if (applyTemplateFrameButton) {
-      const sameFrame = hasTemplateFrame(payload)
-        && Number(templateFrameSlider?.value || 0) === Number(payload.template_frame_index || 0);
-      applyTemplateFrameButton.toggleAttribute(
-        "disabled",
-        !payload.can_change_template_frame || sameFrame || rangeDirty
-      );
-    }
-    templateFrameSlider?.toggleAttribute("disabled", !payload.can_change_template_frame || rangeDirty);
-    templateFrameTimecode?.toggleAttribute("disabled", !payload.can_change_template_frame || rangeDirty);
+    markRangeInButton?.toggleAttribute("disabled", !payload.can_apply_range);
+    markRangeOutButton?.toggleAttribute("disabled", !payload.can_apply_range);
+    clearRangeSelectionButton?.toggleAttribute("disabled", !payload.can_apply_range);
+    sourcePlayheadSlider?.toggleAttribute("disabled", !payload.can_apply_range);
+    templateFrameSlider?.toggleAttribute("disabled", !payload.can_change_template_frame || rangeDirty || rangePendingCompletion);
+    toggleSourcePlaybackButton?.toggleAttribute("disabled", state.canvasMode !== "source");
 
     const currentTarget = activeTarget(payload);
     toggleTargetLockButton?.toggleAttribute("disabled", !currentTarget);
@@ -572,6 +574,9 @@ function bindWorkbench() {
       submitButton.textContent = payload.stage === "preview"
         ? "Queue Matting Job"
         : "Submit Matting Job";
+    }
+    if (timelineSelectedLabel) {
+      timelineSelectedLabel.dataset.pending = rangeDirty || rangePendingCompletion ? "true" : "false";
     }
 
     syncToolButtons(payload);
@@ -642,13 +647,34 @@ function bindWorkbench() {
   }
 
   function renderWorkbench(payload) {
+    const rangeChangedOnServer = (
+      state.rangeAppliedStart !== Number(payload.process_start_frame_index || 0)
+      || state.rangeAppliedEnd !== Number(payload.process_end_frame_index ?? Math.max(0, (payload.frame_count || 1) - 1))
+    );
+    const templateChangedOnServer = (
+      state.templateFrameApplied !== (hasTemplateFrame(payload) ? Number(payload.template_frame_index) : null)
+    );
     state.workbench = payload;
     syncSelectedMasks(payload);
+    if (rangeChangedOnServer || (!state.rangeSelectionTouchedStart && !state.rangeSelectionTouchedEnd)) {
+      state.rangeSelectionStart = Number(payload.process_start_frame_index || 0);
+      state.rangeSelectionEnd = Number(
+        payload.process_end_frame_index ?? Math.max(0, (payload.frame_count || 1) - 1)
+      );
+      state.rangeSelectionTouchedStart = false;
+      state.rangeSelectionTouchedEnd = false;
+    }
     if (
-      state.templateFrameSelection === state.templateFrameApplied
+      templateChangedOnServer
+      || state.templateFrameSelection === state.templateFrameApplied
       || state.templateFrameApplied === null
     ) {
       state.templateFrameSelection = hasTemplateFrame(payload)
+        ? Number(payload.template_frame_index)
+        : Number(payload.process_start_frame_index || 0);
+    }
+    if (rangeChangedOnServer || templateChangedOnServer || state.playheadFrame === undefined || Number.isNaN(state.playheadFrame)) {
+      state.playheadFrame = hasTemplateFrame(payload)
         ? Number(payload.template_frame_index)
         : Number(payload.process_start_frame_index || 0);
     }
@@ -676,14 +702,14 @@ function bindWorkbench() {
     }
     if (selectionNote) {
       selectionNote.textContent = !hasTemplateFrame(payload)
-        ? "Apply the processing range, then choose an anchor frame before placing points."
+        ? "Mark the processing segment, then choose an anchor frame before placing points."
         : payload.stage === "preview"
         ? "Preview is locked. Return to coarse or refine before placing more points."
         : "Use points to establish the person first, then switch into presets or brush cleanup.";
     }
     if (brushNote) {
       brushNote.textContent = !hasTemplateFrame(payload)
-        ? "Brush refinement stays locked until an anchor frame has been applied inside the selected range."
+        ? "Brush refinement stays locked until an anchor frame has been applied inside the green processing segment."
         : payload.stage === "preview"
         ? "Brush refinement is disabled in preview mode."
         : "Brush actions edit the active mask directly, which is useful when SAM2 gets the rough silhouette but misses small edge corrections.";
@@ -780,105 +806,16 @@ function bindWorkbench() {
     }
   }
 
-  function syncPendingRangeFromControls() {
-    if (!state.workbench) {
+  function syncSourcePlaybackButton() {
+    if (!toggleSourcePlaybackButton || !keyframeVideo) {
       return;
     }
-    if (state.rangeSelectionStart > state.rangeSelectionEnd) {
-      state.rangeSelectionEnd = state.rangeSelectionStart;
-    }
-    syncKeyframeSummary(state.workbench);
-    syncActionState(state.workbench);
+    const canPlay = state.canvasMode === "source";
+    toggleSourcePlaybackButton.disabled = !canPlay;
+    toggleSourcePlaybackButton.textContent = keyframeVideo.paused ? "Play" : "Pause";
   }
 
-  processingRangeStart?.addEventListener("input", () => {
-    state.rangeSelectionStart = Number(processingRangeStart.value);
-    if (state.rangeSelectionStart > state.rangeSelectionEnd) {
-      state.rangeSelectionEnd = state.rangeSelectionStart;
-    }
-    syncPendingRangeFromControls();
-    seekVideoToFrame(state.rangeSelectionStart);
-  });
-
-  processingRangeEnd?.addEventListener("input", () => {
-    state.rangeSelectionEnd = Number(processingRangeEnd.value);
-    if (state.rangeSelectionEnd < state.rangeSelectionStart) {
-      state.rangeSelectionStart = state.rangeSelectionEnd;
-    }
-    syncPendingRangeFromControls();
-    seekVideoToFrame(state.rangeSelectionEnd);
-  });
-
-  function commitRangeTimecode(input, bound) {
-    const payload = state.workbench;
-    if (!payload) {
-      return;
-    }
-    const parsedFrame = parseTimecodeToFrame(input.value, payload);
-    if (parsedFrame === null) {
-      setTimecodeInputValue(
-        input,
-        bound === "start" ? state.rangeSelectionStart : state.rangeSelectionEnd,
-        payload
-      );
-      return;
-    }
-    if (bound === "start") {
-      state.rangeSelectionStart = clampFrame(
-        parsedFrame,
-        0,
-        Math.max(0, state.rangeSelectionEnd)
-      );
-    } else {
-      state.rangeSelectionEnd = clampFrame(
-        parsedFrame,
-        state.rangeSelectionStart,
-        Math.max(0, (payload.frame_count || 1) - 1)
-      );
-    }
-    syncPendingRangeFromControls();
-    seekVideoToFrame(bound === "start" ? state.rangeSelectionStart : state.rangeSelectionEnd, payload);
-  }
-
-  processingRangeStartTimecode?.addEventListener("change", () => {
-    commitRangeTimecode(processingRangeStartTimecode, "start");
-  });
-  processingRangeEndTimecode?.addEventListener("change", () => {
-    commitRangeTimecode(processingRangeEndTimecode, "end");
-  });
-
-  templateFrameSlider?.addEventListener("input", () => {
-    state.templateFrameSelection = clampFrame(
-      Number(templateFrameSlider.value),
-      state.rangeAppliedStart,
-      state.rangeAppliedEnd
-    );
-    syncKeyframeSummary(state.workbench);
-    syncActionState(state.workbench);
-    seekVideoToFrame(state.templateFrameSelection);
-  });
-
-  templateFrameTimecode?.addEventListener("change", () => {
-    const payload = state.workbench;
-    if (!payload) {
-      return;
-    }
-    const parsedFrame = parseTimecodeToFrame(templateFrameTimecode.value, payload);
-    if (parsedFrame === null) {
-      setTimecodeInputValue(templateFrameTimecode, state.templateFrameSelection, payload);
-      return;
-    }
-    state.templateFrameSelection = clampFrame(
-      parsedFrame,
-      state.rangeAppliedStart,
-      state.rangeAppliedEnd
-    );
-    syncKeyframeSummary(payload);
-    syncActionState(payload);
-    seekVideoToFrame(state.templateFrameSelection, payload);
-  });
-
-  function syncSelectionFromVideo() {
+  function syncPlayheadFromVideo() {
     const payload = state.workbench;
     if (!payload) {
       return;
@@ -887,62 +824,82 @@ function bindWorkbench() {
     if (!Number.isFinite(fps) || fps <= 0) {
       return;
     }
-    const nextFrame = Math.max(
-      state.rangeAppliedStart,
-      Math.min(
-        state.rangeAppliedEnd,
-        Math.round((keyframeVideo.currentTime || 0) * fps)
-      )
+    const nextFrame = clampFrame(
+      Math.round((keyframeVideo?.currentTime || 0) * fps),
+      0,
+      Math.max(0, (payload.frame_count || 1) - 1)
     );
-    state.templateFrameSelection = nextFrame;
+    state.playheadFrame = nextFrame;
+    if (sourcePlayheadSlider) {
+      sourcePlayheadSlider.value = String(nextFrame);
+    }
     syncKeyframeSummary(payload);
     syncActionState(payload);
   }
 
-  keyframeVideo?.addEventListener("loadedmetadata", () => {
-    syncKeyframeSummary(state.workbench);
-  });
-  keyframeVideo?.addEventListener("seeked", syncSelectionFromVideo);
-  keyframeVideo?.addEventListener("timeupdate", syncSelectionFromVideo);
+  function clearPendingRangeSelection() {
+    const payload = state.workbench;
+    if (!payload) {
+      return;
+    }
+    state.rangeSelectionStart = state.rangeAppliedStart;
+    state.rangeSelectionEnd = state.rangeAppliedEnd;
+    state.rangeSelectionTouchedStart = false;
+    state.rangeSelectionTouchedEnd = false;
+    syncKeyframeSummary(payload);
+    syncActionState(payload);
+  }
 
-  applyProcessingRangeButton?.addEventListener("click", async () => {
-    if (applyProcessingRangeButton.disabled || !state.workbench) {
+  async function applyRangeSelection() {
+    const payload = state.workbench;
+    if (!payload) {
+      return;
+    }
+    const nextStart = Math.min(state.rangeSelectionStart, state.rangeSelectionEnd);
+    const nextEnd = Math.max(state.rangeSelectionStart, state.rangeSelectionEnd);
+    if (
+      nextStart === state.rangeAppliedStart
+      && nextEnd === state.rangeAppliedEnd
+    ) {
+      state.rangeSelectionTouchedStart = false;
+      state.rangeSelectionTouchedEnd = false;
+      syncKeyframeSummary(payload);
+      syncActionState(payload);
       return;
     }
 
     const hasExistingAnnotations = (
-      (state.workbench.mask_names || []).length > 0
-      || hasTemplateFrame(state.workbench)
-      || state.workbench.current_mask_url
-      || state.workbench.current_preview_url
+      (payload.mask_names || []).length > 0
+      || hasTemplateFrame(payload)
+      || payload.current_mask_url
+      || payload.current_preview_url
     );
     if (hasExistingAnnotations) {
       const shouldContinue = window.confirm(
-        "Applying a new processing range will clear the current anchor, current preview, and every saved mask. Continue?"
+        "Changing the processing segment will clear the current anchor, current preview, and every saved mask. Continue?"
       );
       if (!shouldContinue) {
+        clearPendingRangeSelection();
         return;
       }
     }
 
-    setStatus(
-      status,
-      `Applying range ${state.rangeSelectionStart} - ${state.rangeSelectionEnd}...`,
-      false
-    );
+    setStatus(status, `Applying segment ${nextStart} - ${nextEnd}...`, false);
     try {
-      const payload = await parseJson(
+      const nextPayload = await parseJson(
         await fetch(root.dataset.processingRangeEndpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            start_frame_index: state.rangeSelectionStart,
-            end_frame_index: state.rangeSelectionEnd,
+            start_frame_index: nextStart,
+            end_frame_index: nextEnd,
           }),
         })
       );
+      state.rangeSelectionTouchedStart = false;
+      state.rangeSelectionTouchedEnd = false;
       state.canvasMode = "source";
-      renderWorkbench(payload);
+      renderWorkbench(nextPayload);
       setStatus(
         status,
         "Range changed. Re-apply an anchor frame to continue annotation.",
@@ -951,7 +908,163 @@ function bindWorkbench() {
     } catch (error) {
       setStatus(status, error.message, true);
     }
+  }
+
+  function markRangeBoundary(boundary) {
+    const payload = state.workbench;
+    if (!payload) {
+      return;
+    }
+    const frame = clampFrame(
+      state.playheadFrame,
+      0,
+      Math.max(0, (payload.frame_count || 1) - 1)
+    );
+    if (boundary === "start") {
+      state.rangeSelectionStart = frame;
+      state.rangeSelectionTouchedStart = true;
+      if (state.rangeSelectionStart > state.rangeSelectionEnd) {
+        state.rangeSelectionEnd = state.rangeSelectionStart;
+      }
+    } else {
+      state.rangeSelectionEnd = frame;
+      state.rangeSelectionTouchedEnd = true;
+      if (state.rangeSelectionEnd < state.rangeSelectionStart) {
+        state.rangeSelectionStart = state.rangeSelectionEnd;
+      }
+    }
+
+    syncKeyframeSummary(payload);
+    syncActionState(payload);
+    if (state.rangeSelectionTouchedStart && state.rangeSelectionTouchedEnd) {
+      void applyRangeSelection();
+      return;
+    }
+
+    setStatus(
+      status,
+      boundary === "start"
+        ? `In point set to frame ${state.rangeSelectionStart}. Mark Out to confirm the segment.`
+        : `Out point set to frame ${state.rangeSelectionEnd}. Mark In to confirm the segment.`,
+      false
+    );
+  }
+
+  async function applyTemplateFrameSelection() {
+    const payload = state.workbench;
+    if (!payload || !templateFrameSlider || templateFrameSlider.disabled) {
+      return;
+    }
+    const nextFrame = clampFrame(
+      state.templateFrameSelection,
+      state.rangeAppliedStart,
+      state.rangeAppliedEnd
+    );
+    if (hasTemplateFrame(payload) && nextFrame === Number(payload.template_frame_index || 0)) {
+      return;
+    }
+    setStatus(status, `Switching template frame to ${nextFrame}...`, false);
+    try {
+      const nextPayload = await parseJson(
+        await fetch(root.dataset.templateFrameEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ frame_index: nextFrame }),
+        })
+      );
+      state.playheadFrame = nextFrame;
+      renderWorkbench(nextPayload);
+      setStatus(
+        status,
+        `Template frame ${nextPayload.template_frame_index} is now active. Existing unsaved annotations were reset.`,
+        false
+      );
+    } catch (error) {
+      setStatus(status, error.message, true);
+    }
+  }
+
+  sourcePlayheadSlider?.addEventListener("input", () => {
+    const payload = state.workbench;
+    if (!payload) {
+      return;
+    }
+    state.playheadFrame = clampFrame(
+      Number(sourcePlayheadSlider.value),
+      0,
+      Math.max(0, (payload.frame_count || 1) - 1)
+    );
+    syncKeyframeSummary(payload);
+    syncActionState(payload);
+    seekVideoToFrame(state.playheadFrame, payload);
   });
+
+  markRangeInButton?.addEventListener("click", () => {
+    if (markRangeInButton.disabled) {
+      return;
+    }
+    markRangeBoundary("start");
+  });
+
+  markRangeOutButton?.addEventListener("click", () => {
+    if (markRangeOutButton.disabled) {
+      return;
+    }
+    markRangeBoundary("end");
+  });
+
+  clearRangeSelectionButton?.addEventListener("click", () => {
+    if (clearRangeSelectionButton.disabled) {
+      return;
+    }
+    clearPendingRangeSelection();
+    setStatus(status, "Pending range marks cleared.", false);
+  });
+
+  templateFrameSlider?.addEventListener("input", () => {
+    const payload = state.workbench;
+    if (!payload) {
+      return;
+    }
+    state.templateFrameSelection = clampFrame(
+      Number(templateFrameSlider.value),
+      state.rangeAppliedStart,
+      state.rangeAppliedEnd
+    );
+    state.playheadFrame = state.templateFrameSelection;
+    syncKeyframeSummary(payload);
+    syncActionState(payload);
+    seekVideoToFrame(state.playheadFrame, payload);
+  });
+
+  templateFrameSlider?.addEventListener("change", () => {
+    void applyTemplateFrameSelection();
+  });
+
+  toggleSourcePlaybackButton?.addEventListener("click", async () => {
+    if (!keyframeVideo || toggleSourcePlaybackButton.disabled) {
+      return;
+    }
+    try {
+      if (keyframeVideo.paused) {
+        await keyframeVideo.play();
+      } else {
+        keyframeVideo.pause();
+      }
+    } catch (_error) {
+      setStatus(status, "Video playback is temporarily unavailable.", true);
+    }
+    syncSourcePlaybackButton();
+  });
+
+  keyframeVideo?.addEventListener("loadedmetadata", () => {
+    syncKeyframeSummary(state.workbench);
+    syncSourcePlaybackButton();
+  });
+  keyframeVideo?.addEventListener("seeked", syncPlayheadFromVideo);
+  keyframeVideo?.addEventListener("timeupdate", syncPlayheadFromVideo);
+  keyframeVideo?.addEventListener("play", syncSourcePlaybackButton);
+  keyframeVideo?.addEventListener("pause", syncSourcePlaybackButton);
 
   async function patchActiveTarget(patch, pendingMessage, successMessage) {
     const currentTarget = activeTarget();
@@ -1021,30 +1134,6 @@ function bindWorkbench() {
     );
   });
 
-  applyTemplateFrameButton?.addEventListener("click", async () => {
-    if (applyTemplateFrameButton.disabled) {
-      return;
-    }
-    setStatus(status, `Switching template frame to ${state.templateFrameSelection}...`, false);
-    try {
-      const payload = await parseJson(
-        await fetch(root.dataset.templateFrameEndpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ frame_index: state.templateFrameSelection }),
-        })
-      );
-      renderWorkbench(payload);
-      setStatus(
-        status,
-        `Template frame ${payload.template_frame_index} is now active. Existing unsaved annotations were reset.`,
-        false
-      );
-    } catch (error) {
-      setStatus(status, error.message, true);
-    }
-  });
-
   viewButtons.forEach((button) => {
     button.addEventListener("click", () => {
       if (button.disabled) {
@@ -1085,9 +1174,6 @@ function bindWorkbench() {
     }
     stageButtons.find((button) => button.dataset.stage === nextStage)?.click();
   }
-
-  stageBackButton?.addEventListener("click", () => moveStage(-1));
-  stageForwardButton?.addEventListener("click", () => moveStage(1));
 
   presetButtons.forEach((button) => {
     button.addEventListener("click", async () => {
@@ -1359,6 +1445,14 @@ function bindWorkbench() {
     }
 
     switch (lowerKey) {
+      case "i":
+        event.preventDefault();
+        markRangeInButton?.click();
+        return;
+      case "o":
+        event.preventDefault();
+        markRangeOutButton?.click();
+        return;
       case "p":
         event.preventDefault();
         setActiveTool("point-positive");
@@ -1401,7 +1495,7 @@ function bindWorkbench() {
         setCanvasMode("source");
         setStatus(status, "Shortcut: Source view.", false);
         return;
-      case "o":
+      case "v":
         event.preventDefault();
         setCanvasMode("overlay");
         setStatus(status, "Shortcut: Overlay view.", false);

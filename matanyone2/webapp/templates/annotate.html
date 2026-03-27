@@ -25,20 +25,61 @@
     <div class="panel__header workflow-header">
       <div>
         <p class="panel__eyebrow">Annotation Workbench</p>
-        <h1 class="panel__title">Single-page target prep</h1>
+        <h1 class="panel__title">Target Prep Console</h1>
       </div>
       <span id="workflow-stage-chip" class="status-chip status-chip--muted">Coarse Selection</span>
     </div>
 
+    <section id="session-summary" class="workflow-section workflow-section--summary">
+      <div class="workflow-section__header">
+        <div>
+          <p class="panel__eyebrow">Session</p>
+          <h2 class="workflow-section__title">Current context</h2>
+        </div>
+      </div>
+      <dl class="meta-list meta-list--stacked meta-list--compact">
+        <div>
+          <dt>Stage</dt>
+          <dd id="inspector-stage">coarse</dd>
+        </div>
+        <div>
+          <dt>Active Target</dt>
+          <dd id="inspector-target">Target 1</dd>
+        </div>
+        <div>
+          <dt>Preset</dt>
+          <dd id="inspector-preset">Balanced</dd>
+        </div>
+        <div>
+          <dt>Current Points</dt>
+          <dd id="inspector-points">0</dd>
+        </div>
+        <div>
+          <dt>Saved Mask</dt>
+          <dd id="inspector-mask">Not saved yet</dd>
+        </div>
+      </dl>
+      <div class="guidance-card guidance-card--compact">
+        <p class="panel__eyebrow">Stage Guidance</p>
+        <h3 id="stage-guidance-title" class="guidance-card__title">Coarse Selection</h3>
+        <p id="stage-guidance-copy" class="panel-note">
+          Use positive and negative points to establish the subject first. Move to refinement once the silhouette is roughly correct.
+        </p>
+      </div>
+    </section>
+
     <section id="target-controls" class="workflow-section">
       <div class="workflow-section__header">
         <div>
-          <p class="panel__eyebrow">Target</p>
-          <h2 class="workflow-section__title">Current person</h2>
+          <p class="panel__eyebrow">Targets</p>
+          <h2 class="workflow-section__title">Layer stack</h2>
         </div>
         <button id="create-target" class="button button--ghost workflow-inline-button" type="button">
           New Target
         </button>
+      </div>
+      <div id="layer-panel" class="workflow-subpanel">
+        <div id="target-list" class="target-list"></div>
       </div>
       <label class="workflow-field">
         <span class="workflow-field__label">Target name</span>
@@ -53,18 +94,8 @@
         </button>
       </div>
       <p id="target-summary" class="panel-note">
-        Pick one person, save that layer, then move to the next target.
+        Keep each person on a separate layer, save the layer, then move on.
       </p>
-    </section>
-
-    <section id="layer-panel" class="workflow-section">
-      <div class="workflow-section__header">
-        <div>
-          <p class="panel__eyebrow">Layer Stack</p>
-          <h2 class="workflow-section__title">Targets overview</h2>
-        </div>
-      </div>
-      <div id="target-list" class="target-list"></div>
     </section>
 
     <section id="selection-controls" class="workflow-section">
@@ -89,110 +120,113 @@
         </button>
       </div>
       <p id="selection-note" class="panel-note">
-        Start with a few positive and negative points before switching into refinement.
+        Use a few confident points to establish the person before switching into brush cleanup.
       </p>
     </section>
 
-    <section id="preset-controls" class="workflow-section">
+    <section class="workflow-section workflow-section--refine">
       <div class="workflow-section__header">
         <div>
-          <p class="panel__eyebrow">Refine Presets</p>
-          <h2 class="workflow-section__title">Detail intent</h2>
+          <p class="panel__eyebrow">Refine</p>
+          <h2 class="workflow-section__title">Edge cleanup and detail bias</h2>
         </div>
       </div>
-      <div class="preset-grid">
-        <button class="tool-button preset-button" type="button" data-preset="balanced">
-          Balanced
-        </button>
-        <button class="tool-button preset-button" type="button" data-preset="hair">
-          Hair Priority
-        </button>
-        <button class="tool-button preset-button" type="button" data-preset="edge">
-          Edge Priority
-        </button>
-        <button class="tool-button preset-button" type="button" data-preset="motion">
-          Motion Blur
-        </button>
-      </div>
-      <p id="preset-note" class="panel-note">
-        Presets help you decide whether to preserve wispy hair, tighten hard edges, or protect motion blur.
-      </p>
-    </section>
 
-    <section id="brush-controls" class="workflow-section">
-      <div class="workflow-section__header">
-        <div>
+      <section id="preset-controls" class="workflow-subpanel workflow-subpanel--nested">
+        <div class="workflow-subpanel__header">
+          <p class="panel__eyebrow">Preset</p>
+          <h3 class="workflow-section__title">Detail intent</h3>
+        </div>
+        <div class="preset-grid">
+          <button class="tool-button preset-button" type="button" data-preset="balanced">
+            Balanced
+          </button>
+          <button class="tool-button preset-button" type="button" data-preset="hair">
+            Hair Priority
+          </button>
+          <button class="tool-button preset-button" type="button" data-preset="edge">
+            Edge Priority
+          </button>
+          <button class="tool-button preset-button" type="button" data-preset="motion">
+            Motion Blur
+          </button>
+        </div>
+        <p id="preset-note" class="panel-note">
+          Choose whether the current layer should favor wispy hair, tighter edges, or softer motion.
+        </p>
+      </section>
+
+      <section id="brush-controls" class="workflow-subpanel workflow-subpanel--nested">
+        <div class="workflow-subpanel__header">
           <p class="panel__eyebrow">Brush</p>
-          <h2 class="workflow-section__title">Manual edge cleanup</h2>
+          <h3 class="workflow-section__title">Manual cleanup</h3>
         </div>
-      </div>
-      <div class="tool-grid">
-        <button id="brush-add" class="tool-button brush-button" type="button" data-brush-mode="add">
-          Add Area
-        </button>
-        <button id="brush-remove" class="tool-button brush-button" type="button" data-brush-mode="remove">
-          Remove Area
-        </button>
-        <button id="brush-feather" class="tool-button brush-button" type="button" data-brush-mode="feather">
-          Feather Edge
-        </button>
-      </div>
-      <p id="brush-note" class="panel-note">
-        Brush actions operate on the current editable mask so you can fix hairlines and shoulders without re-clicking everything.
-      </p>
+        <div class="tool-grid">
+          <button id="brush-add" class="tool-button brush-button" type="button" data-brush-mode="add">
+            Add Area
+          </button>
+          <button id="brush-remove" class="tool-button brush-button" type="button" data-brush-mode="remove">
+            Remove Area
+          </button>
+          <button id="brush-feather" class="tool-button brush-button" type="button" data-brush-mode="feather">
+            Feather Edge
+          </button>
+        </div>
+        <p id="brush-note" class="panel-note">
+          Brush on top of the current target when the model gets close but still misses hairlines or soft shoulders.
+        </p>
+      </section>
+
+      <section id="detail-controls" class="workflow-subpanel workflow-subpanel--nested">
+        <div class="workflow-subpanel__header">
+          <p class="panel__eyebrow">Controls</p>
+          <h3 class="workflow-section__title">Working sensitivity</h3>
+        </div>
+        <div class="slider-stack">
+          <label class="workflow-field" for="preset-strength">
+            <span class="workflow-field__label">
+              Preset strength
+              <output id="preset-strength-value" for="preset-strength">50%</output>
+            </span>
+            <input id="preset-strength" type="range" min="0" max="100" value="50">
+          </label>
+          <label class="workflow-field" for="motion-strength">
+            <span class="workflow-field__label">
+              Motion softness
+              <output id="motion-strength-value" for="motion-strength">35%</output>
+            </span>
+            <input id="motion-strength" type="range" min="0" max="100" value="35">
+          </label>
+          <label class="workflow-field" for="temporal-stability">
+            <span class="workflow-field__label">
+              Temporal stability
+              <output id="temporal-stability-value" for="temporal-stability">0%</output>
+            </span>
+            <input id="temporal-stability" type="range" min="0" max="100" value="0">
+          </label>
+          <label class="workflow-field" for="brush-radius">
+            <span class="workflow-field__label">
+              Brush size
+              <output id="brush-radius-value" for="brush-radius">28 px</output>
+            </span>
+            <input id="brush-radius" type="range" min="6" max="80" value="28">
+          </label>
+          <label class="workflow-field" for="overlay-opacity">
+            <span class="workflow-field__label">
+              Overlay opacity
+              <output id="overlay-opacity-value" for="overlay-opacity">72%</output>
+            </span>
+            <input id="overlay-opacity" type="range" min="25" max="100" value="72">
+          </label>
+        </div>
+      </section>
     </section>
 
-    <section id="detail-controls" class="workflow-section">
-      <div class="workflow-section__header">
-        <div>
-          <p class="panel__eyebrow">Detail Controls</p>
-          <h2 class="workflow-section__title">Working sensitivity</h2>
-        </div>
-      </div>
-      <div class="slider-stack">
-        <label class="workflow-field" for="preset-strength">
-          <span class="workflow-field__label">
-            Preset strength
-            <output id="preset-strength-value" for="preset-strength">50%</output>
-          </span>
-          <input id="preset-strength" type="range" min="0" max="100" value="50">
-        </label>
-        <label class="workflow-field" for="motion-strength">
-          <span class="workflow-field__label">
-            Motion softness
-            <output id="motion-strength-value" for="motion-strength">35%</output>
-          </span>
-          <input id="motion-strength" type="range" min="0" max="100" value="35">
-        </label>
-        <label class="workflow-field" for="temporal-stability">
-          <span class="workflow-field__label">
-            Temporal stability
-            <output id="temporal-stability-value" for="temporal-stability">0%</output>
-          </span>
-          <input id="temporal-stability" type="range" min="0" max="100" value="0">
-        </label>
-        <label class="workflow-field" for="brush-radius">
-          <span class="workflow-field__label">
-            Brush size
-            <output id="brush-radius-value" for="brush-radius">28 px</output>
-          </span>
-          <input id="brush-radius" type="range" min="6" max="80" value="28">
-        </label>
-        <label class="workflow-field" for="overlay-opacity">
-          <span class="workflow-field__label">
-            Overlay opacity
-            <output id="overlay-opacity-value" for="overlay-opacity">72%</output>
-          </span>
-          <input id="overlay-opacity" type="range" min="25" max="100" value="72">
-        </label>
-      </div>
-    </section>
-
-    <section id="export-selection-panel" class="workflow-section">
+    <section id="export-selection-panel" class="workflow-section workflow-section--commit">
       <div class="workflow-section__header">
         <div>
           <p class="panel__eyebrow">Commit</p>
-          <h2 class="workflow-section__title">Targets to include</h2>
+          <h2 class="workflow-section__title">Saved targets for export</h2>
         </div>
       </div>
       <div id="saved-mask-list" class="saved-mask-list">
@@ -206,83 +240,44 @@
       <p class="panel-note">
         Only checked saved masks will be merged and sent into MatAnyone2.
       </p>
-    </section>
-
-    <section id="inspector-panel" class="workflow-section">
-      <div class="workflow-section__header">
-        <div>
-          <p class="panel__eyebrow">Inspector</p>
-          <h2 class="workflow-section__title">Current context</h2>
-        </div>
-      </div>
-      <dl class="meta-list meta-list--stacked">
-        <div>
-          <dt>Stage</dt>
-          <dd id="inspector-stage">coarse</dd>
-        </div>
-        <div>
-          <dt>Active Target</dt>
-          <dd id="inspector-target">Target 1</dd>
-        </div>
-        <div>
-          <dt>Preset</dt>
-          <dd id="inspector-preset">Balanced</dd>
-        </div>
-        <div>
-          <dt>Current Points</dt>
-          <dd id="inspector-points">0</dd>
-        </div>
-        <div>
-          <dt>Saved Mask</dt>
-          <dd id="inspector-mask">Not saved yet</dd>
-        </div>
-      </dl>
-      <div class="guidance-card">
-        <p class="panel__eyebrow">Stage Guidance</p>
-        <h3 id="stage-guidance-title" class="guidance-card__title">Coarse Selection</h3>
-        <p id="stage-guidance-copy" class="panel-note">
-          Use positive and negative points to establish the subject first. Move to refinement once the silhouette is roughly correct.
-        </p>
+      <div class="workflow-action-bar">
+        <button id="save-mask" class="button button--ghost" type="button">Save Current Target</button>
+        <button id="submit-job" class="button button--primary" type="button">Submit Matting Job</button>
       </div>
     </section>
   </aside>
 
   <section class="workbench-main">
-    <header class="workbench-header panel">
-      <div>
-        <p class="panel__eyebrow">Annotation Workbench</p>
-        <h2 class="panel__title">Draft {{ draft_id }}</h2>
-      </div>
-      <div class="workbench-meta">
-        <span>Source: {{ draft.video_path.name }}</span>
-        <span>{{ draft.width }} x {{ draft.height }}</span>
-      </div>
-    </header>
-
-    <div class="stage-switcher panel">
-      <button id="stage-back" class="tool-button tool-button--ghost" type="button">Back Stage</button>
-      <button class="stage-button" type="button" data-stage="coarse">1. Coarse Selection</button>
-      <button class="stage-button" type="button" data-stage="refine">2. Edge Refinement</button>
-      <button class="stage-button" type="button" data-stage="preview">3. Preview</button>
-      <button id="stage-forward" class="tool-button" type="button">Next Stage</button>
-    </div>
-
-    <section id="canvas-stage" class="panel canvas-stage">
-      <div class="canvas-meta">
-        <div>
-          <p class="panel__eyebrow">Canvas</p>
-          <h3 class="panel__title">Template frame preview</h3>
+    <section id="canvas-stage" class="panel canvas-stage canvas-stage--monitor">
+      <header id="monitor-header" class="monitor-header">
+        <div class="monitor-header__copy">
+          <p class="panel__eyebrow">Source Monitor</p>
+          <h2 class="panel__title">Clip range and matte preview</h2>
+          <div class="workbench-meta">
+            <span>Source: {{ draft.video_path.name }}</span>
+            <span>{{ draft.width }} x {{ draft.height }}</span>
+          </div>
         </div>
+        <div class="monitor-header__controls">
+          <div id="monitor-stage-pills" class="monitor-pill-row">
+            <button class="stage-button stage-button--pill" type="button" data-stage="coarse">Coarse</button>
+            <button class="stage-button stage-button--pill" type="button" data-stage="refine">Refine</button>
+            <button class="stage-button stage-button--pill" type="button" data-stage="preview">Preview</button>
+          </div>
+          <div id="canvas-view-tabs" class="canvas-view-tabs monitor-pill-row">
+            <button class="canvas-view-tab" type="button" data-canvas-mode="source">Source</button>
+            <button class="canvas-view-tab" type="button" data-canvas-mode="overlay">Overlay</button>
+            <button class="canvas-view-tab" type="button" data-canvas-mode="mask">Mask</button>
+          </div>
+        </div>
+      </header>
+
+      <div class="canvas-meta canvas-meta--compact">
         <span id="canvas-mode-label" class="status-chip status-chip--muted">Guided silhouette pass</span>
       </div>
       <p id="canvas-stage-note" class="status-text">
         Establish the subject with a few positive and negative clicks before saving the current target.
       </p>
-      <div id="canvas-view-tabs" class="canvas-view-tabs">
-        <button class="canvas-view-tab" type="button" data-canvas-mode="source">Source</button>
-        <button class="canvas-view-tab" type="button" data-canvas-mode="overlay">Overlay</button>
-        <button class="canvas-view-tab" type="button" data-canvas-mode="mask">Mask</button>
-      </div>
 
       <div class="canvas-frame">
         <video
@@ -290,7 +285,6 @@
           class="canvas-media canvas-media--video"
           src="/api/drafts/{{ draft_id }}/source-video"
           preload="metadata"
-          controls
           muted
           playsinline
           hidden
@@ -304,72 +298,86 @@
       </div>
 
       <section id="canvas-keyframe-panel" class="canvas-keyframe-panel" aria-label="Timeline controls">
-        <section id="processing-range-panel" class="timeline-control-group" aria-label="Processing range">
-          <div class="canvas-keyframe-panel__header">
-            <div>
-              <p class="panel__eyebrow">Processing Range</p>
-              <h3 class="panel__title">Define the processing clip</h3>
-            </div>
-            <button id="apply-processing-range" class="tool-button tool-button--compact" type="button">
-              Apply Range
+        <div class="canvas-keyframe-panel__header canvas-keyframe-panel__header--monitor">
+          <div>
+            <p class="panel__eyebrow">Clip Range</p>
+            <h3 class="panel__title">Mark the segment, then choose the anchor inside it</h3>
+          </div>
+          <div class="timeline-inline-actions">
+            <button id="toggle-source-playback" class="tool-button tool-button--compact" type="button">
+              Play
             </button>
           </div>
+        </div>
 
-          <div class="timeline-range-grid">
-            <label class="workflow-field" for="processing-range-start">
-              <span class="workflow-field__label">
-                In frame
-                <output id="processing-range-start-value" for="processing-range-start">{{ draft.process_start_frame_index }}</output>
-              </span>
-              <input id="processing-range-start" type="range" min="0" max="{{ draft.frame_count - 1 }}" value="{{ draft.process_start_frame_index }}">
-            </label>
+        <div class="timeline-status-row">
+          <span id="timeline-current-label" class="timeline-chip">Playhead · 00:00.00</span>
+          <span id="timeline-selected-label" class="timeline-chip timeline-chip--muted">
+            Pending range · Frame {{ draft.process_start_frame_index }} - {{ draft.process_end_frame_index }}
+          </span>
+          <span id="timeline-applied-label" class="timeline-chip timeline-chip--success">
+            Processing range · Frame {{ draft.process_start_frame_index }} - {{ draft.process_end_frame_index }}
+          </span>
+        </div>
 
-            <label class="workflow-field" for="processing-range-end">
-              <span class="workflow-field__label">
-                Out frame
-                <output id="processing-range-end-value" for="processing-range-end">{{ draft.process_end_frame_index }}</output>
-              </span>
-              <input id="processing-range-end" type="range" min="0" max="{{ draft.frame_count - 1 }}" value="{{ draft.process_end_frame_index }}">
-            </label>
+        <section id="processing-range-panel" class="timeline-control-group timeline-control-group--monitor" aria-label="Processing range">
+          <div id="timeline-range-rail" class="timeline-range-rail">
+            <div id="timeline-range-selection" class="timeline-range-selection"></div>
+            <input
+              id="source-playhead-slider"
+              class="source-playhead-slider"
+              type="range"
+              min="0"
+              max="{{ draft.frame_count - 1 }}"
+              value="{{ draft.template_frame_index if draft.template_frame_index is not none else draft.process_start_frame_index }}"
+            >
           </div>
 
-          <div class="timeline-timecode-grid">
-            <label class="workflow-field" for="processing-range-start-timecode">
-              <span class="workflow-field__label">In timecode</span>
-              <input id="processing-range-start-timecode" class="workflow-input" type="text" value="00:00.00" inputmode="numeric">
-            </label>
-
-            <label class="workflow-field" for="processing-range-end-timecode">
-              <span class="workflow-field__label">Out timecode</span>
-              <input id="processing-range-end-timecode" class="workflow-input" type="text" value="00:00.00" inputmode="numeric">
-            </label>
+          <div class="timeline-action-row">
+            <div>
+              <p class="panel__eyebrow">Segment Selection</p>
+              <h3 class="panel__title">Scrub once, then mark In and Out</h3>
+            </div>
+            <div class="timeline-inline-actions">
+              <button id="mark-range-in" class="tool-button tool-button--compact" type="button">Mark In</button>
+              <button id="mark-range-out" class="tool-button tool-button--compact" type="button">Mark Out</button>
+              <button id="clear-range-selection" class="tool-button tool-button--ghost tool-button--compact" type="button">
+                Clear
+              </button>
+            </div>
           </div>
 
-          <div id="processing-range-summary" class="keyframe-selection-summary">
-            <span id="range-selected-label">Selected range {{ draft.process_start_frame_index }} - {{ draft.process_end_frame_index }}</span>
-            <span id="range-applied-label">Applied range {{ draft.process_start_frame_index }} - {{ draft.process_end_frame_index }}</span>
-            <span id="range-time-label">00:00.00 / 00:00.00</span>
+          <div class="timeline-chip-row">
+            <span id="timeline-in-chip" class="timeline-chip timeline-chip--outline">
+              In · {{ draft.process_start_frame_index }}
+            </span>
+            <span id="timeline-out-chip" class="timeline-chip timeline-chip--outline">
+              Out · {{ draft.process_end_frame_index }}
+            </span>
+            <span id="timeline-duration-chip" class="timeline-chip timeline-chip--outline">
+              Duration · {{ "%.2f"|format(draft.duration_seconds) }}s
+            </span>
           </div>
 
           <p class="panel-note">
-            Pick one continuous interval to process. Applying a new range clears saved masks and requires a new anchor frame.
+            The green band is the processing segment. Changing it clears old masks and asks you to choose a new anchor.
           </p>
         </section>
 
-        <section id="anchor-frame-panel" class="timeline-control-group" aria-label="Anchor frame">
-          <div class="canvas-keyframe-panel__header">
+        <section id="anchor-frame-panel" class="timeline-control-group anchor-control-group" aria-label="Anchor frame">
+          <div class="canvas-keyframe-panel__header anchor-control-group__header">
             <div>
-              <p class="panel__eyebrow">Anchor Frame</p>
-              <h3 class="panel__title">Choose the segmentation anchor</h3>
+              <p class="panel__eyebrow">Inference Anchor</p>
+              <h3 class="panel__title">Choose the frame that seeds segmentation</h3>
             </div>
-            <button id="apply-template-frame" class="tool-button tool-button--compact" type="button">
-              Apply Frame
-            </button>
+            <span id="anchor-frame-summary" class="timeline-chip timeline-chip--muted">
+              Anchor · {{ draft.template_frame_index if draft.template_frame_index is not none else "Not set" }}
+            </span>
           </div>
 
           <label class="workflow-field" for="template-frame-slider">
             <span class="workflow-field__label">
-              Anchor frame
+              Anchor frame inside the green segment
               <output id="template-frame-value" for="template-frame-slider">0</output>
             </span>
             <input
@@ -381,24 +389,21 @@
             >
           </label>
 
-          <label class="workflow-field" for="template-frame-timecode">
-            <span class="workflow-field__label">Anchor timecode</span>
-            <input id="template-frame-timecode" class="workflow-input" type="text" value="00:00.00" inputmode="numeric">
-          </label>
-
-          <div id="keyframe-selection-summary" class="keyframe-selection-summary">
-            <span id="keyframe-selected-label">Selected frame 0</span>
-            <span id="keyframe-applied-label">Applied frame {{ draft.template_frame_index if draft.template_frame_index is not none else "Not set" }}</span>
-            <span id="keyframe-time-label">00:00.00 / 00:00.00</span>
+          <div class="timeline-chip-row">
+            <span id="keyframe-selected-label" class="timeline-chip timeline-chip--outline">Selected frame 0</span>
+            <span id="keyframe-applied-label" class="timeline-chip timeline-chip--success">
+              Applied frame {{ draft.template_frame_index if draft.template_frame_index is not none else "Not set" }}
+            </span>
+            <span id="keyframe-time-label" class="timeline-chip timeline-chip--outline">00:00.00 / 00:00.00</span>
           </div>
 
           <p class="panel-note">
-            The anchor must live inside the applied processing range. MatAnyone2 uses it as the center frame for forward and backward propagation.
+            Drag the slider inside the selected segment. Releasing it applies the new anchor and refreshes the editable preview.
           </p>
         </section>
       </section>
 
-      <section id="preview-compare-strip" class="preview-compare-strip" aria-label="Live preview comparison">
+      <section id="preview-compare-strip" class="preview-compare-strip preview-compare-strip--compact" aria-label="Live preview comparison">
         <article class="preview-compare-card">
           <p class="panel__eyebrow">Before</p>
           <img id="preview-before-image" src="{{ template_frame_url }}" alt="Previous preview state">
@@ -408,11 +413,6 @@
           <img id="preview-live-image" src="{{ template_frame_url }}" alt="Current preview state">
         </article>
       </section>
-
-      <div class="canvas-toolbar">
-        <button id="save-mask" class="button button--ghost" type="button">Save Current Target</button>
-        <button id="submit-job" class="button button--primary" type="button">Submit Matting Job</button>
-      </div>
 
       <p id="annotator-status" class="status-text" aria-live="polite"></p>
     </section>
