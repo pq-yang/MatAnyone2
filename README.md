@@ -49,6 +49,7 @@
 
 
 ## 📮 Update
+- [2026.06] [MatAnyone2Kit](https://github.com/flowtyone/MatAnyone2Kit): a **third-party** Core ML / Swift package port of MatAnyone 2 for Apple platforms in real time. Please refer to the repository for further details.
 - [2026.03] Add uv, CLI, and huggingface support for easy installation and usage.
 - [2026.03] Release inference codes, evaluation codes, and gradio demo.
 - [2025.12] This repo is created.
