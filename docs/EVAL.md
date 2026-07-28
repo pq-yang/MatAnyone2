@@ -2,6 +2,8 @@
 
 This document shows the way to reproduce the quantitative results in our paper on two synthetic benchmarks ([YouTubeMatte](https://github.com/pq-yang/MatAnyone/tree/main?tab=readme-ov-file#youtubematte-dataset) and [VideoMatte](https://github.com/PeterL1n/RobustVideoMatting/blob/master/documentation/training.md#evaluation)) and one real benchmark ([CRGNN](https://github.com/TiantianWang/VideoMatting-CRGNN)).
 
+*If the link for CRGNN expires, we save a local copy for research purposes [here](https://drive.google.com/drive/folders/1OGIOcPwCekp26F2crQ8sx370crJSOtKN?usp=drive_link).*
+
 ## YouTubeMatte
 
 **📦 We provide the inference results with MatAnyone 2 on the YouTubeMatte benchmark [here](https://drive.google.com/drive/folders/1fgPAx4pRGyxGIYW4NeBevDM8PpA0TG9I?usp=sharing).**
